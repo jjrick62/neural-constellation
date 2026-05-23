@@ -1,0 +1,2 @@
+- [项目概览](project_overview.md) — 个人主页"神经星座"项目基本信息、架构、重构方向
+- [工作流规则](workflow_rules.md) — 三阶段修改流程（brainstorm→翻译需求→讲解机理），文档同步规则
