@@ -761,15 +761,18 @@
     }
 
     init(projects) {
-      const radius = 8;
-      const arcSpan = Math.PI * 0.7;
+      // Vertical spiral layout: 2 columns, 3 rows, wide Y spread
       const nodeIds = [];
+      const cols = [-3.5, 3.5];
+      const rows = [5, 0, -5];
 
       projects.forEach((proj, i) => {
-        const angle = -arcSpan / 2 + (arcSpan / (projects.length - 1)) * i;
-        const x = Math.sin(angle) * radius;
-        const z = Math.cos(angle) * radius - 4;
-        const pos = new THREE.Vector3(x, (Math.random() - 0.5) * 1.5, z);
+        const col = cols[i % 2];
+        const row = rows[Math.floor(i / 2)];
+        const x = col + (Math.random() - 0.5) * 1.0;
+        const yPos = row + (Math.random() - 0.5) * 1.0;
+        const z = (Math.random() - 0.5) * 2;
+        const pos = new THREE.Vector3(x, yPos, z);
         const nodeId = this._network.addNode(proj.id, pos, {
           radius: proj.star ? 0.4 : 0.25, isCore: proj.star
         });
@@ -786,15 +789,13 @@
         ctx.fillStyle = '#D4A843'; ctx.font = 'bold 24px Inter, PingFang SC, sans-serif';
         ctx.fillText(proj.name, 20, 45);
         ctx.fillStyle = '#AAAAAA'; ctx.font = '14px Inter, PingFang SC, sans-serif';
-        // Word wrap tagline
-        const words = proj.tagline.split('');
-        let line = ''; let y = 80;
+        let line = ''; let ly = 80;
         for (const char of proj.tagline) {
           if (ctx.measureText(line + char).width > 460 && line.length > 0) {
-            ctx.fillText(line, 20, y); y += 22; line = char;
+            ctx.fillText(line, 20, ly); ly += 22; line = char;
           } else { line += char; }
         }
-        if (line) ctx.fillText(line, 20, y);
+        if (line) ctx.fillText(line, 20, ly);
         ctx.fillStyle = '#B8942E'; ctx.font = '12px monospace';
         ctx.fillText(proj.tech.join(' · '), 20, 175);
 
@@ -804,19 +805,26 @@
         const cardMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
         const card = new THREE.Mesh(cardGeo, cardMat);
         card.position.copy(pos);
-        card.position.y += 0.9;
-        card.lookAt(new THREE.Vector3(pos.x, card.position.y, pos.z + 10));
+        card.position.x += col > 0 ? 2.5 : -2.5;
+        card.position.y += 0.2;
+        card.lookAt(new THREE.Vector3(pos.x, card.position.y, 10));
         card.name = `card_${proj.id}`;
         this._group.add(card);
         this._cards.push({ id: proj.id, card, nodeId });
       });
 
-      // Full interconnect
+      // Vertical chain: connect top→middle→bottom within each column, plus cross-links
       for (let i = 0; i < nodeIds.length; i++) {
         for (let j = i + 1; j < nodeIds.length; j++) {
-          this._network.connect(nodeIds[i], nodeIds[j], {
-            tubeRadius: 0.015, flowSpeed: 0.5 + Math.random()
-          });
+          const yi = this._network.getNodeWorldPosition(nodeIds[i]).y;
+          const yj = this._network.getNodeWorldPosition(nodeIds[j]).y;
+          const dy = Math.abs(yi - yj);
+          // Connect if same column (vertical chain) or close Y (cross link)
+          if (i % 2 === j % 2 || dy < 3) {
+            this._network.connect(nodeIds[i], nodeIds[j], {
+              tubeRadius: 0.015, flowSpeed: 0.3 + Math.random() * 0.4
+            });
+          }
         }
       }
     }
@@ -857,27 +865,29 @@
       // Center node
       this._network.addNode('vincent', new THREE.Vector3(0, 0, 0), { radius: 0.6, isCore: true });
 
-      // Inner ring — core skills
+      // Inner ring — core skills, spread vertically ±2
       const innerRadius = 3;
       skills.core.forEach((skill, i) => {
         const angle = (Math.PI * 2 / skills.core.length) * i;
+        const yOff = (i < 2) ? 2 : -2;
         const pos = new THREE.Vector3(
           Math.cos(angle) * innerRadius,
-          (Math.random() - 0.5) * 1.5,
+          yOff + (Math.random() - 0.5) * 0.8,
           Math.sin(angle) * innerRadius
         );
         const nodeId = this._network.addNode(`core_${i}`, pos, { radius: 0.35, isCore: true });
         this._network.connect('vincent', nodeId, { tubeRadius: 0.025, flowSpeed: 1.2 });
-        this._group.add(this._createLabel(skill.name, pos.clone().add(new THREE.Vector3(0, 0.5, 0)), false));
+        this._group.add(this._createLabel(skill.name, pos.clone().add(new THREE.Vector3(0, 0.6, 0)), false));
       });
 
-      // Outer ring — auxiliary skills
+      // Outer ring — auxiliary skills, spread vertically ±4
       const outerRadius = 6;
       skills.auxiliary.forEach((skill, i) => {
         const angle = (Math.PI * 2 / skills.auxiliary.length) * i + 0.2;
+        const yOff = (i < 4) ? 3.5 : -3.5;
         const pos = new THREE.Vector3(
           Math.cos(angle) * outerRadius,
-          (Math.random() - 0.5) * 2.5,
+          yOff + (Math.random() - 0.5) * 1.0,
           Math.sin(angle) * outerRadius
         );
         const nodeId = this._network.addNode(`aux_${i}`, pos, { radius: 0.18, isCore: false });
@@ -1071,13 +1081,16 @@
     const starfield = new StarfieldBackground(stage.scene, 200000);
     const post = new PostProcessing(stage.renderer, stage.scene, stage.camera);
 
-    // Camera keyframes — simplified 4-scene path
+    // Camera keyframes — vertical flight path
     const camCtrl = new CameraController(stage.camera);
-    camCtrl.addKeyframe(0.0,   new THREE.Vector3(0, 0, 8),  new THREE.Vector3(0, 0, 0), 50);
-    camCtrl.addKeyframe(0.25,  new THREE.Vector3(0, 1, 8),  new THREE.Vector3(0, 0, 0), 45);
-    camCtrl.addKeyframe(0.50,  new THREE.Vector3(0, 2, 8),  new THREE.Vector3(0, 0, 0), 45);
-    camCtrl.addKeyframe(0.75,  new THREE.Vector3(0, 0, 8),  new THREE.Vector3(0, 0, 0), 50);
-    camCtrl.addKeyframe(1.0,   new THREE.Vector3(0, 0, 8),  new THREE.Vector3(0, 0, 0), 50);
+    camCtrl.addKeyframe(0.0,   new THREE.Vector3(0, 0, 8),   new THREE.Vector3(0, 0, 0), 50);
+    camCtrl.addKeyframe(0.12,  new THREE.Vector3(0, 1, 8),   new THREE.Vector3(0, 0, 0), 48);
+    camCtrl.addKeyframe(0.25,  new THREE.Vector3(0, 3, 7),   new THREE.Vector3(0, 2, 0), 45);
+    camCtrl.addKeyframe(0.38,  new THREE.Vector3(0, 5, 7),   new THREE.Vector3(0, 4, 0), 43);
+    camCtrl.addKeyframe(0.50,  new THREE.Vector3(0, 7, 6),   new THREE.Vector3(0, 6, 0), 42);
+    camCtrl.addKeyframe(0.62,  new THREE.Vector3(0, 4, 7),   new THREE.Vector3(0, 3, 0), 44);
+    camCtrl.addKeyframe(0.75,  new THREE.Vector3(0, 0, 10),  new THREE.Vector3(0, 0, 0), 50);
+    camCtrl.addKeyframe(1.0,   new THREE.Vector3(0, 0, 8),   new THREE.Vector3(0, 0, 0), 50);
 
     // Initialize scenes
     const scenes = [
