@@ -119,7 +119,6 @@
   const ShaderLib = {
     particleVS: `
       attribute float aSize;
-      varying vec3 vColor;
       uniform float uPointScale;
       void main() {
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -128,7 +127,20 @@
       }
     `,
 
-    particleFS_color: `
+    particleVS_color: `
+      attribute float aSize;
+      attribute vec3 aColor;
+      varying vec3 vColor;
+      uniform float uPointScale;
+      void main() {
+        vColor = aColor;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * uPointScale * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+
+    particleFS: `
       varying vec3 vColor;
       void main() {
         float d = length(gl_PointCoord - 0.5) * 2.0;
@@ -151,8 +163,9 @@
       varying vec3 vNormal;
       uniform vec3 uColor;
       void main() {
-        float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
-        gl_FragColor = vec4(uColor, intensity * 0.6);
+        float fresnel = 1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0)));
+        float intensity = pow(fresnel, 3.0);
+        gl_FragColor = vec4(uColor, intensity * 1.5);
       }
     `,
   };
@@ -179,6 +192,15 @@
 
       this.scene = new THREE.Scene();
       this.scene.background = new THREE.Color('#000000');
+
+      const ambientLight = new THREE.AmbientLight(0x222233, 1.5);
+      this.scene.add(ambientLight);
+      const pointLight = new THREE.PointLight(0xD4A843, 30, 30);
+      pointLight.position.set(0, 5, 10);
+      this.scene.add(pointLight);
+      const pointLight2 = new THREE.PointLight(0x886622, 15, 25);
+      pointLight2.position.set(-5, -2, 5);
+      this.scene.add(pointLight2);
 
       this.camera = new THREE.PerspectiveCamera(45, this._width / this._height, 0.1, 100);
       this.camera.position.set(0, 0, 20);
@@ -296,33 +318,44 @@
 
   // ===== StarfieldBackground =====
   class StarfieldBackground {
-    constructor(scene, count = 1200000) {
+    constructor(scene, count = 200000) {
       this._scene = scene;
       this._count = count;
 
       const positions = new Float32Array(count * 3);
       const sizes = new Float32Array(count);
+      const colors = new Float32Array(count * 3);
 
       for (let i = 0; i < count; i++) {
-        const r = 30 + Math.random() * 30;
+        const r = 40 + Math.random() * 40;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);
         positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
         positions[i * 3 + 2] = r * Math.cos(phi);
-        sizes[i] = 0.02 + Math.random() * 0.06;
+        sizes[i] = 0.03 + Math.random() * 0.09;
+
+        const hue = 0.58 + Math.random() * 0.05;
+        const sat = 0.1 + Math.random() * 0.2;
+        const light = 0.3 + Math.random() * 0.5;
+        const color = new THREE.Color();
+        color.setHSL(hue, sat, light);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
       }
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+      geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
 
       const material = new THREE.ShaderMaterial({
         uniforms: {
           uPointScale: new THREE.Uniform(1.0),
         },
-        vertexShader: ShaderLib.particleVS,
-        fragmentShader: ShaderLib.particleFS_white,
+        vertexShader: ShaderLib.particleVS_color,
+        fragmentShader: ShaderLib.particleFS,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
@@ -331,51 +364,14 @@
       this._points = new THREE.Points(geometry, material);
       this._points.name = 'starfield';
       scene.add(this._points);
-
-      // Web Worker for async particle position updates
-      const workerCode = `
-        self.onmessage = function(e) {
-          var positions = e.data.positions;
-          var delta = e.data.delta;
-          var len = positions.length;
-          for (var i = 0; i < len; i += 3) {
-            positions[i] += (Math.random() - 0.5) * delta * 0.02;
-            positions[i + 1] += (Math.random() - 0.5) * delta * 0.02;
-          }
-          self.postMessage({ positions: positions }, [positions.buffer]);
-        };
-      `;
-      try {
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        this._worker = new Worker(URL.createObjectURL(blob));
-        this._workerActive = true;
-        this._pendingUpdate = false;
-        this._worker.onmessage = (e) => {
-          const attr = this._points.geometry.attributes.position;
-          attr.array.set(e.data.positions);
-          attr.needsUpdate = true;
-          this._pendingUpdate = false;
-        };
-      } catch (e) {
-        this._workerActive = false;
-      }
     }
 
-    update(delta, cameraPos = null, mouseRipple = null) {
-      this._points.rotation.y += delta * 0.015;
-      this._points.rotation.x += delta * 0.005;
-
-      // Offload position jitter to Worker
-      if (this._workerActive && !this._pendingUpdate) {
-        const attr = this._points.geometry.attributes.position;
-        const copy = new Float32Array(attr.array);
-        this._pendingUpdate = true;
-        this._worker.postMessage({ positions: copy, delta }, [copy.buffer]);
-      }
+    update(delta) {
+      this._points.rotation.y += delta * 0.003;
+      this._points.rotation.x += delta * 0.001;
     }
 
     dispose() {
-      if (this._worker) this._worker.terminate();
       this._points.geometry.dispose();
       this._points.material.dispose();
       this._scene.remove(this._points);
@@ -490,25 +486,6 @@
     }
   }
 
-  // ===== generateMatcapTexture — programmatic MatCap =====
-  function generateMatcapTexture() {
-    const size = 256;
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const gradient = ctx.createRadialGradient(
-      size * 0.3, size * 0.3, size * 0.05,
-      size * 0.5, size * 0.5, size * 0.7
-    );
-    gradient.addColorStop(0, '#FFF8E7');
-    gradient.addColorStop(0.25, '#D4A843');
-    gradient.addColorStop(0.55, '#6B4C00');
-    gradient.addColorStop(1, '#000000');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-    return new THREE.CanvasTexture(canvas);
-  }
-
   // ===== SynapseNetwork =====
   class SynapseNetwork {
     constructor(scene) {
@@ -524,17 +501,18 @@
       const { radius = 0.3, isCore = false } = options;
       const colorHex = isCore ? '#D4A843' : '#B8942E';
 
-      const geo = new THREE.IcosahedronGeometry(radius, 2);
-      const matcapTex = generateMatcapTexture();
-      const mat = isCore
-        ? new THREE.MeshMatcapMaterial({ matcap: matcapTex, color: colorHex })
-        : new THREE.MeshBasicMaterial({ color: colorHex });
+      const geo = new THREE.SphereGeometry(radius, 32, 32);
+      const mat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        roughness: 0.25,
+        metalness: 0.8,
+      });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.copy(position);
       mesh.name = `node_${id}`;
 
       // Glow halo (outer transparent sphere)
-      const glowGeo = new THREE.SphereGeometry(radius * 2.5, 16, 16);
+      const glowGeo = new THREE.SphereGeometry(radius * 3.5, 32, 32);
       const glowMat = new THREE.ShaderMaterial({
         uniforms: { uColor: new THREE.Uniform(new THREE.Color(colorHex)) },
         vertexShader: `
@@ -1064,12 +1042,12 @@
     const stage = new Stage('stage-container');
     const mouse = new MouseManager(stage.renderer.domElement);
     const cursorUI = new CursorUI();
-    const starfield = new StarfieldBackground(stage.scene, 800000);
+    const starfield = new StarfieldBackground(stage.scene, 200000);
     const post = new PostProcessing(stage.renderer, stage.scene, stage.camera);
 
     // Camera keyframes — 4-scene flight path
     const camCtrl = new CameraController(stage.camera);
-    camCtrl.addKeyframe(0.0,   new THREE.Vector3(0, 0, 15), new THREE.Vector3(0, 0, 0), 45);
+    camCtrl.addKeyframe(0.0,   new THREE.Vector3(0, 0, 10), new THREE.Vector3(0, 0, 0), 45);
     camCtrl.addKeyframe(0.20,  new THREE.Vector3(0, 0.5, 12), new THREE.Vector3(0, 0, 0), 42);
     camCtrl.addKeyframe(0.25,  new THREE.Vector3(0, 1, 10), new THREE.Vector3(0, 0, -4), 40);
     camCtrl.addKeyframe(0.45,  new THREE.Vector3(3, 0.5, 6), new THREE.Vector3(0, 0, -4), 38);
@@ -1093,62 +1071,94 @@
     // Hide scenes 2-4 initially
     for (let i = 1; i < scenes.length; i++) scenes[i]._group.visible = false;
 
-    // GSAP ScrollTrigger
+    // ===== Debug Scaffold =====
+    const DEBUG = {
+      _steps: [],
+      _errors: [],
+      log(step, detail) {
+        const entry = { step, detail, time: performance.now().toFixed(1) };
+        this._steps.push(entry);
+        console.log(`[${entry.time}ms] ${step}`, detail || '');
+      },
+      err(step, e) {
+        const entry = { step, error: e.message || e, stack: e.stack, time: performance.now().toFixed(1) };
+        this._errors.push(entry);
+        console.error(`[${entry.time}ms] ERROR @ ${step}:`, e);
+      },
+      dump() { console.table(this._steps); if (this._errors.length) console.table(this._errors); }
+    };
+    window.__DEBUG = DEBUG;
+
+    DEBUG.log('bootstrap', '开始组装');
+
+    // ===== GSAP ScrollTrigger =====
     document.body.style.height = '400vh';
     gsap.registerPlugin(ScrollTrigger);
+    DEBUG.log('scrolltrigger', 'GSAP+ScrollTrigger 已注册');
 
     const scrollProxy = { progress: 0 };
     let prevSceneIdx = 0;
+    let _frameCount = 0;
 
-    gsap.to(scrollProxy, {
-      progress: 1,
-      ease: 'none',
-      scrollTrigger: {
-        trigger: document.body,
-        start: 'top top',
-        end: 'bottom bottom',
-        scrub: 0.5,
-        onUpdate: (self) => {
-          camCtrl.update(self.progress);
-          const sceneIdx = Math.min(Math.floor(self.progress * 4), 3);
-
-          // Scene switching
-          if (sceneIdx !== prevSceneIdx) {
-            scenes[prevSceneIdx]._group.visible = false;
-            scenes[sceneIdx]._group.visible = true;
-            stage.emit('scene:enter', { index: sceneIdx });
-            prevSceneIdx = sceneIdx;
-          }
-
-          // Scene-local progress
-          const perScene = 0.25;
-          const localProgress = Math.min((self.progress - sceneIdx * perScene) / perScene, 1);
-
-          mouse.update();
-          const delta = stage.clock.getDelta();
-          starfield.update(delta, camCtrl.getPosition(), mouse.ripple);
-          scenes[sceneIdx].update(delta, localProgress, mouse.normalized);
-          cursorUI.update(mouse);
-          if (post._rgbStrength > 0.001) {
-            post.render(delta, self.progress, mouse.normalized);
-          } else {
-            stage.renderer.render(stage.scene, stage.camera);
-          }
+    try {
+      gsap.to(scrollProxy, {
+        progress: 1, ease: 'none',
+        scrollTrigger: {
+          trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.5,
         }
+      });
+      DEBUG.log('tween', 'GSAP tween + ScrollTrigger 已创建');
+    } catch (e) { DEBUG.err('创建ScrollTrigger', e); }
+
+    // ===== 持续 rAF 渲染循环 =====
+    let _rafId;
+    function _persistentLoop(ts) {
+      _rafId = requestAnimationFrame(_persistentLoop);
+      try {
+        const delta = Math.min(stage.clock.getDelta(), 0.1);
+        mouse.update();
+
+        const st = ScrollTrigger.getAll()[0];
+        const p = st ? st.progress : scrollProxy.progress;
+        camCtrl.update(p);
+        starfield.update(delta);
+
+        const sceneIdx = Math.min(Math.floor(p * 4), 3);
+        const localP = Math.min((p - sceneIdx * 0.25) / 0.25, 1);
+
+        scenes.forEach((s, i) => { s._group.visible = (i === sceneIdx); });
+        if (sceneIdx !== prevSceneIdx) {
+          DEBUG.log('scene', `${prevSceneIdx} → ${sceneIdx} @ ${(p*100).toFixed(1)}%`);
+          prevSceneIdx = sceneIdx;
+        }
+        scenes[sceneIdx].update(delta, localP, mouse.normalized);
+        cursorUI.update(mouse);
+        stage.renderer.render(stage.scene, stage.camera);
+
+        _frameCount++;
+        if (_frameCount === 1) DEBUG.log('F1', `场景${sceneIdx} 进度${p.toFixed(3)} 相机z${camCtrl.getPosition().z.toFixed(1)} Δ${delta.toFixed(4)}`);
+      } catch (e) {
+        DEBUG.err('渲染循环', e);
+        if (_frameCount > 60) { cancelAnimationFrame(_rafId); DEBUG.err('渲染停止', '连续错误>60帧'); }
       }
-    });
+    }
+    _persistentLoop(0);
+    DEBUG.log('rAF', '渲染循环启动');
 
-    // Preloader
-    const preloader = new Preloader(() => {
-      console.log('Neural Constellation ready');
-    });
-    preloader.start();
-    setTimeout(() => preloader.complete(), 1500);
+    // ===== Preloader =====
+    try {
+      const preloader = new Preloader(() => { DEBUG.log('preloader', '回调触发'); });
+      preloader.start();
+      DEBUG.log('preloader', '开场动画已启动');
+      setTimeout(() => {
+        try { preloader.complete(); DEBUG.log('preloader', '动画结束，遮罩已移除'); }
+        catch (e) { DEBUG.err('preloader完成', e); }
+      }, 1500);
+    } catch (e) { DEBUG.err('创建Preloader', e); }
 
-    // Expose for debugging
     window.__stage = stage;
     window.__scenes = scenes;
-    console.log('Neural Constellation initialized. Scroll to explore.');
+    DEBUG.log('ready', 'Neural Constellation 初始化完成 — 滚动以探索');
   });
   </script>
 </body>
