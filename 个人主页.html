@@ -868,11 +868,10 @@
     }
   }
 
-  // ===== Scene2_NeuralGallery — Project cards with synapse connections =====
+  // ===== Scene2_NeuralGallery — 项目卡片（无节点球/轨道管） =====
   class Scene2_NeuralGallery {
     constructor(stage) {
       this._stage = stage;
-      this._network = new SynapseNetwork(stage.scene);
       this._group = new THREE.Group();
       this._group.name = 'scene2_gallery';
       stage.scene.add(this._group);
@@ -880,8 +879,6 @@
     }
 
     init(projects) {
-      // Vertical spiral layout: 2 columns, 3 rows, wide Y spread
-      const nodeIds = [];
       const cols = [-3.5, 3.5];
       const rows = [5, 0, -5];
 
@@ -891,13 +888,7 @@
         const x = col + (Math.random() - 0.5) * 1.0;
         const yPos = row + (Math.random() - 0.5) * 1.0;
         const z = (Math.random() - 0.5) * 2;
-        const pos = new THREE.Vector3(x, yPos, z);
-        const nodeId = this._network.addNode(proj.id, pos, {
-          radius: proj.star ? 0.4 : 0.25, isCore: proj.star
-        });
-        nodeIds.push(nodeId);
 
-        // Project card
         const canvas = document.createElement('canvas');
         canvas.width = 512; canvas.height = 200;
         const ctx = canvas.getContext('2d');
@@ -923,44 +914,24 @@
         const cardGeo = new THREE.PlaneGeometry(3, 1.17);
         const cardMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
         const card = new THREE.Mesh(cardGeo, cardMat);
-        card.position.copy(pos);
-        card.position.x += col > 0 ? 2.5 : -2.5;
-        card.position.y += 0.2;
-        card.lookAt(new THREE.Vector3(pos.x, card.position.y, 10));
+        card.position.set(x, yPos, z);
+        card.lookAt(new THREE.Vector3(x, yPos, 10));
         card.name = `card_${proj.id}`;
         this._group.add(card);
-        this._cards.push({ id: proj.id, card, nodeId });
+        this._cards.push({ id: proj.id, card, pos: new THREE.Vector3(x, yPos, z) });
       });
-
-      // Vertical chain: connect top→middle→bottom within each column, plus cross-links
-      for (let i = 0; i < nodeIds.length; i++) {
-        for (let j = i + 1; j < nodeIds.length; j++) {
-          const yi = this._network.getNodeWorldPosition(nodeIds[i]).y;
-          const yj = this._network.getNodeWorldPosition(nodeIds[j]).y;
-          const dy = Math.abs(yi - yj);
-          // Connect if same column (vertical chain) or close Y (cross link)
-          if (i % 2 === j % 2 || dy < 3) {
-            this._network.connect(nodeIds[i], nodeIds[j], {
-              tubeRadius: 0.015, flowSpeed: 0.3 + Math.random() * 0.4
-            });
-          }
-        }
-      }
     }
 
     update(delta, progress, mousePos) {
-      this._network.update(delta, mousePos);
-      // Highlight the "current" card based on progress
-      const activeIdx = Math.floor(progress * this._cards.length);
+      const activeIdx = Math.min(Math.floor(progress * this._cards.length), this._cards.length - 1);
       this._cards.forEach((c, i) => {
-        this._network.setNodeActive(c.nodeId, i === activeIdx);
+        c.card.material.opacity = (i === activeIdx) ? 1.0 : 0.5;
       });
     }
 
     onEnter() { this._group.visible = true; }
     onLeave() { this._group.visible = false; }
     dispose() {
-      this._network.dispose();
       this._group.children.forEach(c => {
         if (c.material.map) c.material.map.dispose();
         c.material.dispose(); c.geometry.dispose();
@@ -969,50 +940,41 @@
     }
   }
 
-  // ===== Scene3_SkillConstellation — Skills as node constellations =====
+  // ===== Scene3_SkillConstellation — 技能标签（无节点球/轨道管） =====
   class Scene3_SkillConstellation {
     constructor(stage) {
       this._stage = stage;
-      this._network = new SynapseNetwork(stage.scene);
       this._group = new THREE.Group();
       this._group.name = 'scene3_constellation';
-      this._rotationSpeed = 0.08;
+      this._rotationSpeed = 0.05;
       stage.scene.add(this._group);
     }
 
     init(skills) {
-      // Center node
-      this._network.addNode('vincent', new THREE.Vector3(0, 0, 0), { radius: 0.6, isCore: true });
-
-      // Inner ring — core skills, spread vertically ±2
+      // Inner ring — core skills
       const innerRadius = 3;
       skills.core.forEach((skill, i) => {
         const angle = (Math.PI * 2 / skills.core.length) * i;
         const yOff = (i < 2) ? 2 : -2;
         const pos = new THREE.Vector3(
           Math.cos(angle) * innerRadius,
-          yOff + (Math.random() - 0.5) * 0.8,
+          yOff,
           Math.sin(angle) * innerRadius
         );
-        const nodeId = this._network.addNode(`core_${i}`, pos, { radius: 0.35, isCore: true });
-        this._network.connect('vincent', nodeId, { tubeRadius: 0.025, flowSpeed: 1.2 });
-        this._group.add(this._createLabel(skill.name, pos.clone().add(new THREE.Vector3(0, 0.6, 0)), false));
+        this._group.add(this._createLabel(skill.name, pos, false));
       });
 
-      // Outer ring — auxiliary skills, spread vertically ±4
+      // Outer ring — auxiliary skills
       const outerRadius = 6;
       skills.auxiliary.forEach((skill, i) => {
         const angle = (Math.PI * 2 / skills.auxiliary.length) * i + 0.2;
         const yOff = (i < 4) ? 3.5 : -3.5;
         const pos = new THREE.Vector3(
           Math.cos(angle) * outerRadius,
-          yOff + (Math.random() - 0.5) * 1.0,
+          yOff,
           Math.sin(angle) * outerRadius
         );
-        const nodeId = this._network.addNode(`aux_${i}`, pos, { radius: 0.18, isCore: false });
-        const nearestCoreIdx = i % skills.core.length;
-        this._network.connect(`core_${nearestCoreIdx}`, nodeId, { tubeRadius: 0.01, flowSpeed: 0.4 });
-        this._group.add(this._createLabel(skill.name, pos.clone().add(new THREE.Vector3(0, 0.35, 0)), true));
+        this._group.add(this._createLabel(skill.name, pos, true));
       });
     }
 
@@ -1035,13 +997,15 @@
 
     update(delta, progress, mousePos) {
       this._group.rotation.y += this._rotationSpeed * delta;
-      this._network.update(delta, mousePos);
     }
 
     onEnter() { this._group.visible = true; }
     onLeave() { this._group.visible = false; }
     dispose() {
-      this._network.dispose();
+      this._group.children.forEach(c => {
+        if (c.material.map) c.material.map.dispose();
+        c.material.dispose();
+      });
       this._stage.scene.remove(this._group);
     }
   }
