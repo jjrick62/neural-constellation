@@ -848,48 +848,157 @@
     }
   }
 
-  // ===== Smoke test — test all 4 scenes =====
-  const stage = new Stage('stage-container');
-  const starfield = new StarfieldBackground(stage.scene, 300000);
-  const mouse = new MouseManager(stage.renderer.domElement);
-
-  const scenes = [
-    new Scene1_Hero(stage),
-    new Scene2_NeuralGallery(stage),
-    new Scene3_SkillConstellation(stage),
-    new Scene4_About(stage),
-  ];
-  scenes[0].init();
-  scenes[1].init(DataModel.projects);
-  scenes[2].init(DataModel.skills);
-  scenes[3].init(DataModel.personal);
-
-  // Hide scenes 2-4 for now, show scene 1
-  scenes[1]._group.visible = false;
-  scenes[2]._group.visible = false;
-  scenes[3]._group.visible = false;
-
-  console.log('All 4 scenes initialized');
-  console.log('Scene 1 visible, scenes 2-4 hidden. Check console.');
-
-  // Cycle through scenes with keyboard
-  window.addEventListener('keydown', (e) => {
-    if (e.key >= '1' && e.key <= '4') {
-      const idx = parseInt(e.key) - 1;
-      scenes.forEach((s, i) => { s._group.visible = (i === idx); });
-      console.log(`Showing scene ${idx + 1}`);
+  // ===== Preloader =====
+  class Preloader {
+    constructor(onComplete) {
+      this._onComplete = onComplete;
+      this._el = document.getElementById('preloader');
+      this._el.innerHTML = `
+        <div style="position:fixed;inset:0;z-index:9999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 0.8s;">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <polygon points="40,10 15,70 40,50 65,70" fill="none" stroke="#D4A843" stroke-width="2">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+            </polygon>
+            <circle cx="40" cy="40" r="35" fill="none" stroke="#B8942E" stroke-width="1" stroke-dasharray="220" stroke-dashoffset="220">
+              <animate attributeName="stroke-dashoffset" from="220" to="0" dur="1.5s" fill="freeze"/>
+            </circle>
+          </svg>
+          <p style="color:#B8942E;font-family:monospace;margin-top:1.5rem;font-size:0.75rem;letter-spacing:0.2em;">INITIALIZING</p>
+        </div>
+      `;
     }
-  });
 
-  function smokeTest() {
-    requestAnimationFrame(smokeTest);
-    const delta = stage.clock.getDelta();
-    mouse.update();
-    starfield.update(delta);
-    scenes.forEach(s => s.update(delta, 0, mouse.normalized));
-    stage.renderer.render(stage.scene, stage.camera);
+    start() {} // Resources load, then caller calls complete()
+
+    complete() {
+      this._el.style.opacity = '0';
+      setTimeout(() => {
+        this._el.style.display = 'none';
+        if (this._onComplete) this._onComplete();
+      }, 800);
+    }
   }
-  smokeTest();
+
+  // ===== CursorUI =====
+  class CursorUI {
+    constructor() {
+      this._el = document.getElementById('cursor');
+      this._state = 'default';
+      document.addEventListener('mousemove', (e) => {
+        this._el.style.transform = `translate(${e.clientX - 10}px, ${e.clientY - 10}px)`;
+      });
+    }
+
+    setState(state) {
+      this._state = state;
+      this._el.className = `cursor cursor--${state}`;
+      if (state === 'hover') {
+        this._el.style.width = '40px';
+        this._el.style.height = '40px';
+      } else {
+        this._el.style.width = '20px';
+        this._el.style.height = '20px';
+      }
+    }
+
+    update(mouseManager) {
+      const speed = Math.sqrt(mouseManager.velocity.x ** 2 + mouseManager.velocity.y ** 2);
+      const scale = 1 + speed * 2;
+      const plus = this._el.querySelector('.cursor__plus');
+      if (plus) plus.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+
+    dispose() {}
+  }
+
+  // ===== App Bootstrap =====
+  window.addEventListener('DOMContentLoaded', () => {
+    const stage = new Stage('stage-container');
+    const mouse = new MouseManager(stage.renderer.domElement);
+    const cursorUI = new CursorUI();
+    const starfield = new StarfieldBackground(stage.scene, 800000);
+    const post = new PostProcessing(stage.renderer, stage.scene, stage.camera);
+
+    // Camera keyframes — 4-scene flight path
+    const camCtrl = new CameraController(stage.camera);
+    camCtrl.addKeyframe(0.0,   new THREE.Vector3(0, 0, 15), new THREE.Vector3(0, 0, 0), 45);
+    camCtrl.addKeyframe(0.20,  new THREE.Vector3(0, 0.5, 12), new THREE.Vector3(0, 0, 0), 42);
+    camCtrl.addKeyframe(0.25,  new THREE.Vector3(0, 1, 10), new THREE.Vector3(0, 0, -4), 40);
+    camCtrl.addKeyframe(0.45,  new THREE.Vector3(3, 0.5, 6), new THREE.Vector3(0, 0, -4), 38);
+    camCtrl.addKeyframe(0.50,  new THREE.Vector3(0, 2, 12), new THREE.Vector3(0, 0, 0), 42);
+    camCtrl.addKeyframe(0.70,  new THREE.Vector3(0, 1.5, 5), new THREE.Vector3(0, 0, 0), 35);
+    camCtrl.addKeyframe(0.75,  new THREE.Vector3(0, 0, 18), new THREE.Vector3(0, 0, 0), 50);
+    camCtrl.addKeyframe(1.0,   new THREE.Vector3(0, 0, 15), new THREE.Vector3(0, 0, 0), 45);
+
+    // Initialize scenes
+    const scenes = [
+      new Scene1_Hero(stage),
+      new Scene2_NeuralGallery(stage),
+      new Scene3_SkillConstellation(stage),
+      new Scene4_About(stage),
+    ];
+    scenes[0].init();
+    scenes[1].init(DataModel.projects);
+    scenes[2].init(DataModel.skills);
+    scenes[3].init(DataModel.personal);
+
+    // Hide scenes 2-4 initially
+    for (let i = 1; i < scenes.length; i++) scenes[i]._group.visible = false;
+
+    // GSAP ScrollTrigger
+    document.body.style.height = '400vh';
+    gsap.registerPlugin(ScrollTrigger);
+
+    const scrollProxy = { progress: 0 };
+    let prevSceneIdx = 0;
+
+    gsap.to(scrollProxy, {
+      progress: 1,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: document.body,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: 0.5,
+        onUpdate: (self) => {
+          camCtrl.update(self.progress);
+          const sceneIdx = Math.min(Math.floor(self.progress * 4), 3);
+
+          // Scene switching
+          if (sceneIdx !== prevSceneIdx) {
+            scenes[prevSceneIdx]._group.visible = false;
+            scenes[sceneIdx]._group.visible = true;
+            stage.emit('scene:enter', { index: sceneIdx });
+            prevSceneIdx = sceneIdx;
+          }
+
+          // Scene-local progress
+          const perScene = 0.25;
+          const localProgress = Math.min((self.progress - sceneIdx * perScene) / perScene, 1);
+
+          mouse.update();
+          const delta = stage.clock.getDelta();
+          starfield.update(delta, camCtrl.getPosition(), mouse.ripple);
+          scenes[sceneIdx].update(delta, localProgress, mouse.normalized);
+          cursorUI.update(mouse);
+          post.render(delta, self.progress, mouse.normalized);
+          stage.renderer.render(stage.scene, stage.camera);
+        }
+      }
+    });
+
+    // Preloader
+    const preloader = new Preloader(() => {
+      console.log('Neural Constellation ready');
+    });
+    preloader.start();
+    setTimeout(() => preloader.complete(), 1500);
+
+    // Expose for debugging
+    window.__stage = stage;
+    window.__scenes = scenes;
+    console.log('Neural Constellation initialized. Scroll to explore.');
+  });
   </script>
 </body>
 </html>
