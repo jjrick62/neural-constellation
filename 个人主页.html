@@ -317,49 +317,163 @@
     getTarget() { return this._currentLookAt.clone(); }
   }
 
-  // ===== StarfieldBackground =====
+  // ===== StarfieldBackground — 外部光源照亮固定粒子，非自发光 =====
   class StarfieldBackground {
-    constructor(scene, count = 200000) {
+    constructor(scene, count = 150000) {
       this._scene = scene;
       this._count = count;
 
+      // ===== 聚类中心：粒子围绕这些点呈高斯分布 =====
+      const clusters = [
+        { x: 0, y: 0, z: 0, weight: 0.25, spread: 15 },
+        { x: 0, y: 4, z: 0, weight: 0.20, spread: 10 },
+        { x: 0, y: 7, z: 0, weight: 0.20, spread: 10 },
+        { x: -4, y: 2, z: -2, weight: 0.15, spread: 12 },
+        { x: 4, y: 5, z: -2, weight: 0.10, spread: 12 },
+        { x: 0, y: -3, z: 0, weight: 0.10, spread: 18 },
+      ];
+
       const positions = new Float32Array(count * 3);
       const sizes = new Float32Array(count);
-      const colors = new Float32Array(count * 3);
+      const worldPosStore = new Float32Array(count * 3); // 存世界坐标给光照计算
+
+      // 高斯随机数生成器 (Box-Muller)
+      function gaussRandom() {
+        let u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+      }
 
       for (let i = 0; i < count; i++) {
-        const r = 40 + Math.random() * 40;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        positions[i * 3 + 2] = r * Math.cos(phi);
-        sizes[i] = 0.03 + Math.random() * 0.09;
+        // 按权重随机选一个聚类中心
+        let r = Math.random();
+        let c = clusters[0];
+        let acc = 0;
+        for (const cl of clusters) {
+          acc += cl.weight;
+          if (r <= acc) { c = cl; break; }
+        }
 
-        const hue = 0.58 + Math.random() * 0.05;
-        const sat = 0.1 + Math.random() * 0.2;
-        const light = 0.3 + Math.random() * 0.5;
-        const color = new THREE.Color();
-        color.setHSL(hue, sat, light);
-        colors[i * 3] = color.r;
-        colors[i * 3 + 1] = color.g;
-        colors[i * 3 + 2] = color.b;
+        // 高斯偏移
+        const ox = gaussRandom() * c.spread;
+        const oy = gaussRandom() * c.spread;
+        const oz = gaussRandom() * c.spread;
+
+        const wx = c.x + ox;
+        const wy = c.y + oy;
+        const wz = c.z + oz;
+
+        positions[i * 3] = wx;
+        positions[i * 3 + 1] = wy;
+        positions[i * 3 + 2] = wz;
+        worldPosStore[i * 3] = wx;
+        worldPosStore[i * 3 + 1] = wy;
+        worldPosStore[i * 3 + 2] = wz;
+
+        // ===== 粒子大小 = 基础值 + 小比例伪随机噪声 =====
+        const distFromCenter = Math.sqrt(ox*ox + oy*oy + oz*oz);
+        const baseSize = 0.08 - (distFromCenter / c.spread) * 0.05;
+        const noiseSize = baseSize * (
+          1.0 + Math.sin(wx * 7.31 + wz * 3.17) * 0.12
+              + Math.cos(wy * 5.73 + wx * 2.91) * 0.10
+              + Math.sin((wx + wy) * 4.19 + wz * 6.53) * 0.08
+        );
+        sizes[i] = Math.max(0.015, Math.min(0.18, noiseSize));
       }
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-      geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+      // 存世界坐标到 UV（不会被 group 旋转影响）
+      geometry.setAttribute('aWorldPos', new THREE.BufferAttribute(worldPosStore, 3));
 
+      // ===== Shader：外部光源照亮粒子，非自发光 =====
       const material = new THREE.ShaderMaterial({
         uniforms: {
           uPointScale: new THREE.Uniform(1.0),
+          // 光源数据（位置 + 颜色）
+          uLight1Pos: new THREE.Uniform(new THREE.Vector3(0, 5, 10)),
+          uLight1Color: new THREE.Uniform(new THREE.Color('#D4A843')),
+          uLight2Pos: new THREE.Uniform(new THREE.Vector3(-5, -2, 5)),
+          uLight2Color: new THREE.Uniform(new THREE.Color('#B8942E')),
+          uLight3Pos: new THREE.Uniform(new THREE.Vector3(0, 0, 8)),
+          uLight3Color: new THREE.Uniform(new THREE.Color('#FFF8E7')),
+          uCameraPos: new THREE.Uniform(new THREE.Vector3(0, 0, 8)),
         },
-        vertexShader: ShaderLib.particleVS_color,
-        fragmentShader: ShaderLib.particleFS,
+        vertexShader: `
+          attribute float aSize;
+          attribute vec3 aWorldPos;
+          varying vec3 vWorldPos;
+          varying float vSize;
+          uniform float uPointScale;
+          uniform vec3 uCameraPos;
+          void main() {
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = aSize * uPointScale * (300.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+            vWorldPos = aWorldPos;
+            vSize = aSize;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vWorldPos;
+          varying float vSize;
+          uniform vec3 uLight1Pos;
+          uniform vec3 uLight1Color;
+          uniform vec3 uLight2Pos;
+          uniform vec3 uLight2Color;
+          uniform vec3 uLight3Pos;
+          uniform vec3 uLight3Color;
+          uniform vec3 uCameraPos;
+
+          void main() {
+            // 圆形粒子蒙版
+            float d = length(gl_PointCoord - 0.5) * 2.0;
+            float alpha = 1.0 - smoothstep(0.2, 0.9, d);
+
+            // === 光照计算：外部光源反光，非自发光 ===
+            vec3 totalLight = vec3(0.0);
+
+            // 光源1
+            float d1 = length(vWorldPos - uLight1Pos);
+            float att1 = 1.0 / (1.0 + d1 * d1 * 0.005);
+            totalLight += uLight1Color * att1;
+
+            // 光源2
+            float d2 = length(vWorldPos - uLight2Pos);
+            float att2 = 1.0 / (1.0 + d2 * d2 * 0.008);
+            totalLight += uLight2Color * att2;
+
+            // 光源3（摄像机位置的补光）
+            float d3 = length(vWorldPos - uLight3Pos);
+            float att3 = 1.0 / (1.0 + d3 * d3 * 0.003);
+            totalLight += uLight3Color * att3 * 0.5;
+
+            // === 摄像机距离色偏：近暖金，远冷蓝 ===
+            float camDist = length(vWorldPos - uCameraPos);
+            float warmth = exp(-camDist * 0.03);
+            vec3 nearColor = vec3(1.0, 0.85, 0.6);
+            vec3 farColor  = vec3(0.35, 0.45, 0.65);
+            vec3 baseColor = mix(farColor, nearColor, warmth);
+
+            // === 叠加高亮噪声炫光 ===
+            float sparkle = 0.0;
+            sparkle += sin(vWorldPos.x * 23.7 + vWorldPos.y * 17.3) * 0.15;
+            sparkle += cos(vWorldPos.y * 31.1 + vWorldPos.z * 19.7) * 0.12;
+            sparkle += sin(vWorldPos.z * 27.3 + vWorldPos.x * 21.1) * 0.10;
+            sparkle = abs(sparkle);
+            sparkle = pow(sparkle, 3.0) * 0.6; // 少数粒子高亮反光
+
+            vec3 finalColor = baseColor * totalLight * (1.0 + sparkle);
+            float finalAlpha = alpha * (0.35 + totalLight.r * 0.65);
+
+            gl_FragColor = vec4(finalColor, finalAlpha);
+          }
+        `,
         transparent: true,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
       });
 
       this._points = new THREE.Points(geometry, material);
@@ -367,9 +481,14 @@
       scene.add(this._points);
     }
 
-    update(delta) {
-      this._points.rotation.y += delta * 0.003;
-      this._points.rotation.x += delta * 0.001;
+    update(delta, cameraPos) {
+      // 极慢的整体旋转（模拟星河流转）
+      this._points.rotation.y += delta * 0.001;
+      this._points.rotation.x += delta * 0.0005;
+      // 更新摄像机位置给 shader
+      if (cameraPos) {
+        this._points.material.uniforms.uCameraPos.value.copy(cameraPos);
+      }
     }
 
     dispose() {
@@ -1158,7 +1277,7 @@
         const maxScroll = document.body.scrollHeight - window.innerHeight;
         const p = maxScroll > 0 ? Math.min(window.scrollY / maxScroll, 1) : 0;
         camCtrl.update(p);
-        starfield.update(delta);
+        starfield.update(delta, camCtrl.getPosition());
 
         const sceneIdx = Math.min(Math.floor(p * 4), 3);
         const localP = Math.min((p - sceneIdx * 0.25) / 0.25, 1);
