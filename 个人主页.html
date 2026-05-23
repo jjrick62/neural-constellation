@@ -331,37 +331,182 @@
       this._points = new THREE.Points(geometry, material);
       this._points.name = 'starfield';
       scene.add(this._points);
+
+      // Web Worker for async particle position updates
+      const workerCode = `
+        self.onmessage = function(e) {
+          var positions = e.data.positions;
+          var delta = e.data.delta;
+          var len = positions.length;
+          for (var i = 0; i < len; i += 3) {
+            positions[i] += (Math.random() - 0.5) * delta * 0.02;
+            positions[i + 1] += (Math.random() - 0.5) * delta * 0.02;
+          }
+          self.postMessage({ positions: positions }, [positions.buffer]);
+        };
+      `;
+      try {
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        this._worker = new Worker(URL.createObjectURL(blob));
+        this._workerActive = true;
+        this._pendingUpdate = false;
+        this._worker.onmessage = (e) => {
+          const attr = this._points.geometry.attributes.position;
+          attr.array.set(e.data.positions);
+          attr.needsUpdate = true;
+          this._pendingUpdate = false;
+        };
+      } catch (e) {
+        this._workerActive = false;
+      }
     }
 
     update(delta, cameraPos = null, mouseRipple = null) {
-      // Simple rotation for now
       this._points.rotation.y += delta * 0.015;
       this._points.rotation.x += delta * 0.005;
+
+      // Offload position jitter to Worker
+      if (this._workerActive && !this._pendingUpdate) {
+        const attr = this._points.geometry.attributes.position;
+        const copy = new Float32Array(attr.array);
+        this._pendingUpdate = true;
+        this._worker.postMessage({ positions: copy, delta }, [copy.buffer]);
+      }
     }
 
     dispose() {
+      if (this._worker) this._worker.terminate();
       this._points.geometry.dispose();
       this._points.material.dispose();
       this._scene.remove(this._points);
     }
   }
 
-  // ===== PostProcessing (stub) =====
+  // ===== PostProcessing — render-to-texture with RGB shift + vignette =====
   class PostProcessing {
     constructor(renderer, scene, camera) {
       this._renderer = renderer;
+      this._scene = scene;
+      this._camera = camera;
+
+      // Fullscreen quad scene for post-processing
+      this._ppScene = new THREE.Scene();
+      this._ppCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+      // Render targets
+      const size = new THREE.Vector2();
+      renderer.getSize(size);
+      this._rtA = new THREE.WebGLRenderTarget(size.x, size.y, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      });
+      this._rtB = new THREE.WebGLRenderTarget(size.x, size.y, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      });
+
+      // RGB Shift + vignette shader
+      const ppShader = {
+        uniforms: {
+          tDiffuse: new THREE.Uniform(null),
+          uRGBStrength: new THREE.Uniform(0.0),
+          uTime: new THREE.Uniform(0.0),
+          uResolution: new THREE.Uniform(new THREE.Vector2(size.x, size.y)),
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D tDiffuse;
+          uniform float uRGBStrength;
+          uniform float uTime;
+          uniform vec2 uResolution;
+          varying vec2 vUv;
+
+          void main() {
+            vec2 uv = vUv;
+            float angle = uTime * 0.1;
+            vec2 offset = uRGBStrength * 0.01 * vec2(cos(angle), sin(angle));
+            float r = texture2D(tDiffuse, uv + offset).r;
+            float g = texture2D(tDiffuse, uv).g;
+            float b = texture2D(tDiffuse, uv - offset).b;
+            float a = texture2D(tDiffuse, uv).a;
+
+            // Vignette
+            vec2 vuv = uv - 0.5;
+            float vignette = 1.0 - dot(vuv, vuv) * 0.5;
+
+            gl_FragColor = vec4(r, g, b, a) * vignette;
+          }
+        `,
+      };
+
+      this._ppMaterial = new THREE.ShaderMaterial(ppShader);
+      const quadGeo = new THREE.PlaneGeometry(2, 2);
+      this._ppQuad = new THREE.Mesh(quadGeo, this._ppMaterial);
+      this._ppScene.add(this._ppQuad);
+
       this._rgbStrength = 0;
       this._bloomStrength = 0;
+
+      // Resize handler
+      this._onResize = () => {
+        const s = new THREE.Vector2();
+        renderer.getSize(s);
+        this._rtA.setSize(s.x, s.y);
+        this._rtB.setSize(s.x, s.y);
+        this._ppMaterial.uniforms.uResolution.value.set(s.x, s.y);
+      };
     }
 
-    setRGBStrength(value) { this._rgbStrength = THREE.MathUtils.clamp(value, 0, 1); }
-    setBloomStrength(value) { this._bloomStrength = THREE.MathUtils.clamp(value, 0, 2); }
+    setRGBStrength(v) { this._rgbStrength = THREE.MathUtils.clamp(v, 0, 1); }
+    setBloomStrength(v) { this._bloomStrength = THREE.MathUtils.clamp(v, 0, 2); }
 
     render(delta, scrollProgress, mousePos) {
-      // Stub — will be filled in later tasks
+      if (this._rgbStrength < 0.001) return; // Skip if no effect
+
+      // Render scene to texture
+      this._renderer.setRenderTarget(this._rtA);
+      this._renderer.render(this._scene, this._camera);
+
+      // Apply post-processing
+      this._ppMaterial.uniforms.tDiffuse.value = this._rtA.texture;
+      this._ppMaterial.uniforms.uRGBStrength.value = this._rgbStrength;
+      this._ppMaterial.uniforms.uTime.value += delta;
+
+      this._renderer.setRenderTarget(null);
+      this._renderer.render(this._ppScene, this._ppCamera);
     }
 
-    dispose() {}
+    dispose() {
+      this._rtA.dispose();
+      this._rtB.dispose();
+      this._ppMaterial.dispose();
+      this._ppQuad.geometry.dispose();
+    }
+  }
+
+  // ===== generateMatcapTexture — programmatic MatCap =====
+  function generateMatcapTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(
+      size * 0.3, size * 0.3, size * 0.05,
+      size * 0.5, size * 0.5, size * 0.7
+    );
+    gradient.addColorStop(0, '#FFF8E7');
+    gradient.addColorStop(0.25, '#D4A843');
+    gradient.addColorStop(0.55, '#6B4C00');
+    gradient.addColorStop(1, '#000000');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(canvas);
   }
 
   // ===== SynapseNetwork =====
@@ -380,7 +525,10 @@
       const colorHex = isCore ? '#D4A843' : '#B8942E';
 
       const geo = new THREE.IcosahedronGeometry(radius, 2);
-      const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+      const matcapTex = generateMatcapTexture();
+      const mat = isCore
+        ? new THREE.MeshMatcapMaterial({ matcap: matcapTex, color: colorHex })
+        : new THREE.MeshBasicMaterial({ color: colorHex });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.copy(position);
       mesh.name = `node_${id}`;
@@ -981,8 +1129,11 @@
           starfield.update(delta, camCtrl.getPosition(), mouse.ripple);
           scenes[sceneIdx].update(delta, localProgress, mouse.normalized);
           cursorUI.update(mouse);
-          post.render(delta, self.progress, mouse.normalized);
-          stage.renderer.render(stage.scene, stage.camera);
+          if (post._rgbStrength > 0.001) {
+            post.render(delta, self.progress, mouse.normalized);
+          } else {
+            stage.renderer.render(stage.scene, stage.camera);
+          }
         }
       }
     });
