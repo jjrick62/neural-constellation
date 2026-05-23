@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Vincent · Neural Constellation — 数据与代码的静谧建筑">
+<title>Vincent · Neural Constellation</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    cursor: none;
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage-container { position: fixed; inset: 0; z-index: 1; }
+  #stage-container canvas { display: block; }
+  #preloader {
+    position: fixed; inset: 0; z-index: 9999; background: #000;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    transition: opacity 0.8s;
+  }
+  #cursor {
+    position: fixed; z-index: 9998; pointer-events: none;
+    width: 20px; height: 20px;
+    border: 1px solid rgba(212,168,67,0.6);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.15s, height 0.15s, border-color 0.15s;
+    mix-blend-mode: difference;
+  }
+  #cursor.cursor--hover { width: 40px; height: 40px; border-color: rgba(212,168,67,1); }
+  .cursor__plus {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: rgba(212,168,67,0.9); font-size: 14px; font-weight: 300;
+  }
+</style>
+</head>
+<body>
+  <div id="stage-container"></div>
+  <div id="preloader"></div>
+  <div id="cursor" class="cursor"><span class="cursor__plus">+</span></div>
+
+  <!-- CDN Dependencies -->
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+
+  <!-- ===== 1. 数据层 ===== -->
+  <script>
+  // ===== 1. 数据层 =====
+  const COLORS = {
+    bg:           '#000000',
+    mainGold:     '#D4A843',
+    amber:        '#B8942E',
+    darkGold:     '#8B6914',
+    starCool:     '#8899AA',
+    starWarm:     '#CCAA66',
+    pipelineGlow: '#C9A040',
+  };
+
+  const DataModel = {
+    personal: {
+      nameCn: '翟伟鑫',
+      nameEn: 'Vincent',
+      email: ['3320780962@QQ.com', 'jrickjrick27@gmail.com'],
+      github: 'https://github.com/jjrick62',
+      quote: 'AI 不是替代人，而是放大人的创造力。'
+    },
+    projects: [
+      { id: 'claude-mobile', name: 'Claude Code Mobile Bridge',
+        tagline: '将桌面 AI Agent 包装为手机可远程操控的服务',
+        tech: ['AI Agent 编排', 'WebSocket', 'Python Flask'],
+        github: 'https://github.com/jjrick62/claude-mobile-chat', star: true },
+      { id: 'taffy-interviewer', name: 'AI 模拟面试官',
+        tagline: '虚拟主播 AI 面试系统，STAR 行为面试法长链推理',
+        tech: ['Prompt Engineering', '长链推理', 'React'],
+        github: 'https://github.com/jjrick62/taffy-interviewer-web', star: false },
+      { id: 'gesture-earth', name: 'Gesture Earth',
+        tagline: '手势控制 3D 地球，21 关键点实时追踪',
+        tech: ['计算机视觉', '手势识别', 'Three.js'],
+        github: 'https://github.com/jjrick62/gesture-earth-demo', star: true },
+      { id: 'travel-album', name: '3D 粒子地球旅行相册',
+        tagline: '30 万+粒子渲染全球海岸线，PWA 全离线',
+        tech: ['Three.js', 'PWA', 'IndexedDB'],
+        github: 'https://github.com/jjrick62/travel-album-3d', star: false },
+      { id: 'gomoku', name: '五子棋联机对战',
+        tagline: 'WebSocket 权威服务端状态同步，四方向扫描胜负判定',
+        tech: ['Node.js', 'WebSocket', 'Canvas'],
+        github: 'https://github.com/jjrick62/gomoku-online', star: false },
+      { id: 'alarm-math', name: '算术闹钟',
+        tagline: '答对 5 道加减法题才能关闭的 Flutter 闹钟',
+        tech: ['Flutter', 'Dart', 'Android'],
+        github: 'https://github.com/jjrick62/alarm_math_app', star: false }
+    ],
+    skills: {
+      core: [
+        { name: 'AI Agent 编排' }, { name: 'Three.js 3D 可视化' },
+        { name: 'WebSocket 实时通信' }, { name: '计算机视觉' }
+      ],
+      auxiliary: [
+        { name: 'React' }, { name: 'Python Flask' },
+        { name: 'PWA' }, { name: 'Flutter' },
+        { name: 'Prompt Engineering' }, { name: 'Canvas' },
+        { name: 'MediaPipe' }, { name: 'Git' }
+      ]
+    }
+  };
+  </script>
+
+  <!-- ===== 2. Shader 库 ===== -->
+  <script>
+  // ===== 2. Shader 库 =====
+  const ShaderLib = {
+    particleVS: `
+      attribute float aSize;
+      varying vec3 vColor;
+      uniform float uPointScale;
+      void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * uPointScale * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+
+    particleFS_color: `
+      varying vec3 vColor;
+      void main() {
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        float alpha = 1.0 - smoothstep(0.0, 1.0, d);
+        alpha *= 0.8;
+        gl_FragColor = vec4(vColor, alpha);
+      }
+    `,
+
+    particleFS_white: `
+      void main() {
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        float alpha = 1.0 - smoothstep(0.0, 1.0, d);
+        alpha *= 0.9;
+        gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+      }
+    `,
+
+    glowFS: `
+      varying vec3 vNormal;
+      uniform vec3 uColor;
+      void main() {
+        float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+        gl_FragColor = vec4(uColor, intensity * 0.6);
+      }
+    `,
+  };
+  </script>
+
+  <!-- ===== 5. 调度层 ===== -->
+  <script type="module">
+  // ===== 5. 调度层 =====
+  import * as THREE from 'three';
+
+  class Stage {
+    constructor(containerId) {
+      this._container = document.getElementById(containerId);
+      this._width = window.innerWidth;
+      this._height = window.innerHeight;
+
+      this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      this.renderer.setSize(this._width, this._height);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.2;
+      this._container.appendChild(this.renderer.domElement);
+
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color('#000000');
+
+      this.camera = new THREE.PerspectiveCamera(45, this._width / this._height, 0.1, 100);
+      this.camera.position.set(0, 0, 20);
+
+      this.clock = new THREE.Clock();
+      this._events = {};
+      this._sceneIndex = 0;
+
+      this._onResize = () => {
+        this._width = window.innerWidth;
+        this._height = window.innerHeight;
+        this.renderer.setSize(this._width, this._height);
+        this.camera.aspect = this._width / this._height;
+        this.camera.updateProjectionMatrix();
+        this.emit('resize', { width: this._width, height: this._height });
+      };
+      window.addEventListener('resize', this._onResize);
+    }
+
+    on(event, fn) { (this._events[event] ||= []).push(fn); }
+    emit(event, data) { (this._events[event] || []).forEach(fn => fn(data)); }
+
+    get currentSceneIndex() { return this._sceneIndex; }
+  }
+
+  // Quick smoke test
+  const stage = new Stage('stage-container');
+  console.log('Stage initialized:', stage.renderer.domElement);
+
+  // Simple render loop for smoke test
+  function smokeTest() {
+    requestAnimationFrame(smokeTest);
+    stage.renderer.render(stage.scene, stage.camera);
+  }
+  smokeTest();
+  </script>
+</body>
+</html>

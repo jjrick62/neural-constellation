@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="数据与代码的静谧建筑——个人作品集">
+<meta property="og:title" content="Personal Portfolio — The Quiet Architecture of Data">
+<meta property="og:description" content="数据与代码的静谧建筑">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0D0D0D">
+<title>Portfolio — The Quiet Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400&family=Plus+Jakarta+Sans:wght@200;300&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   CSS Custom Properties
+   ============================================ */
+:root {
+  --bg:            #FAF7F2;
+  --bg-alt:        #F0EBE4;
+  --text:          #1F1B15;
+  --text-muted:    #8B7E74;
+  --gold:          #B8942E;
+  --gold-dim:      rgba(184,148,46,0.12);
+  --gold-glow:     rgba(184,148,46,0.2);
+  --gold-bright:   #D4A843;
+  --font-display:  'Cormorant Garamond', 'Noto Serif SC', serif;
+  --font-body:     'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
+  --font-mono:     'JetBrains Mono', 'Fira Code', monospace;
+  --ease-expo:     cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-quart:    cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-smooth:   cubic-bezier(0.65, 0, 0.35, 1);
+  --section-gap:   6rem;
+}
+
+/* ============================================
+   Section Background Alternation
+   ============================================ */
+.section--cream  { background: #FAF7F2; }
+.section--warm   {
+  background-color: #F2EDE6;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.section--light  { background: #FDFBF8; }
+
+/* Section gradient divider */
+.section--divider::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(600px, 70vw);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(184,148,46,0.15), var(--gold), rgba(184,148,46,0.15), transparent);
+  pointer-events: none;
+}
+
+/* Geometric corner accents */
+.section--accented {
+  position: relative;
+}
+
+.section--accented::before,
+.section--accented::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.2;
+}
+
+.section--accented::before {
+  top: 3rem;
+  left: 3rem;
+  border-top: 1px solid var(--gold);
+  border-left: 1px solid var(--gold);
+}
+
+.section--accented::after {
+  bottom: 3rem;
+  right: 3rem;
+  border-bottom: 1px solid var(--gold);
+  border-right: 1px solid var(--gold);
+}
+
+/* ============================================
+   Reset & Base
+   ============================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  scroll-behavior: auto;
+  background: radial-gradient(ellipse at 50% 0%, #FEFCF9 0%, #FAF7F2 40%, #F0EBE4 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: clamp(16px, 1.2vw, 20px);
+  line-height: 1.7;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  cursor: none;
+}
+
+body {
+  position: relative;
+  overflow-x: hidden;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-expo);
+}
+
+/* Grain texture overlay — luxury film-stock feel */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.3'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  opacity: 0.025;
+}
+
+body.loaded { opacity: 1; }
+
+::selection {
+  background: var(--gold-dim);
+  color: var(--gold-bright);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  cursor: none;
+  transition: color 0.3s var(--ease-smooth);
+}
+
+a:hover { color: var(--gold); }
+
+img { display: block; max-width: 100%; }
+
+/* ============================================
+   Typography
+   ============================================ */
+h1, h2, h3, .display {
+  font-family: var(--font-display);
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+}
+
+.display--xl {
+  font-size: clamp(3.5rem, 6vw, 7rem);
+  letter-spacing: 0.05em;
+}
+
+.display--lg {
+  font-size: clamp(2.5rem, 4vw, 4.5rem);
+}
+
+.display--md {
+  font-size: clamp(1.8rem, 3vw, 3rem);
+}
+
+.text--gold { color: var(--gold); }
+.text--muted { color: var(--text-muted); }
+.text--mono { font-family: var(--font-mono); font-weight: 300; font-size: 0.8rem; }
+
+.uppercase { text-transform: uppercase; letter-spacing: 0.2em; }
+
+.golden-rule {
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-dim), transparent);
+  margin: 1.5rem 0;
+}
+
+/* ============================================
+   Artistic Typography
+   ============================================ */
+.gold-text {
+  color: var(--gold);
+  text-shadow: 0 1px 2px rgba(184,148,46,0.15);
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+/* Hero-only: gradient clip (safe at 5rem+) */
+.gold-text--hero {
+  background: linear-gradient(175deg, #D4A843 0%, #B8942E 25%, #8B6914 55%, #C9A040 80%, #E0B84C 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  -webkit-text-stroke: 0.01em rgba(184,148,46,0.08);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.gold-text--animated {
+  color: var(--gold);
+  background-size: 100% 200%;
+  color: var(--gold);
+  text-shadow: 0 1px 2px rgba(184,148,46,0.15);
+  animation: gold-shimmer 4s ease-in-out infinite;
+}
+
+@keyframes gold-shimmer {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 0% 100%; }
+}
+
+.text-glow {
+  text-shadow:
+    0 0 40px rgba(201,169,110,0.2),
+    0 0 80px rgba(201,169,110,0.08),
+    0 0 120px rgba(201,169,110,0.04);
+}
+
+/* Drop Cap */
+.drop-cap::first-letter {
+  font-family: var(--font-display);
+  font-size: 5rem;
+  font-weight: 300;
+  float: left;
+  line-height: 0.7;
+  margin-right: 0.22em;
+  margin-top: 0.04em;
+  color: var(--gold);
+  letter-spacing: -0.03em;
+}
+
+/* Artistic Number */
+.number-art {
+  font-family: var(--font-display);
+  font-size: 8rem;
+  font-weight: 300;
+  line-height: 0.8;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--gold-dim);
+  opacity: 0.6;
+  user-select: none;
+}
+.section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.section__inner {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 6rem 4rem;
+}
+
+.section-marker {
+  position: absolute;
+  font-family: var(--font-display);
+  font-size: 15rem;
+  font-weight: 300;
+  color: var(--text);
+  opacity: 0.03;
+  pointer-events: none;
+  line-height: 1;
+  user-select: none;
+}
+
+/* ============================================
+   Preloader
+   ============================================ */
+.preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: radial-gradient(ellipse at 50% 50%, #FEFCF9 0%, #F0EBE4 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s var(--ease-expo);
+}
+
+.preloader--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.preloader__canvas {
+  width: 120px;
+  height: 120px;
+}
+
+.preloader__monogram {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.preloader__label {
+  margin-top: 2rem;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 300;
+  letter-spacing: 0.35em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-expo);
+}
+
+.preloader__label--visible { opacity: 1; }
+
+/* ============================================
+   Hero
+   ============================================ */
+.hero {
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+}
+
+/* Slow-rotating golden ring — watch-movement precision */
+.hero__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(380px, 60vw);
+  height: min(380px, 60vw);
+  margin-left: calc(min(380px, 60vw) / -2);
+  margin-top: calc(min(380px, 60vw) / -2);
+  border: 0.5px solid rgba(184,148,46,0.2);
+  border-radius: 50%;
+  z-index: 0;
+  opacity: 0;
+  animation: ring-rotate 30s linear infinite;
+  pointer-events: none;
+}
+
+.hero__ring::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  background: var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(184,148,46,0.5);
+}
+
+@keyframes ring-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.hero__canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+.hero__name {
+  opacity: 0;
+  transform: translateY(40px);
+}
+
+.hero__tagline {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  font-weight: 300;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.hero__scroll-indicator {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid var(--gold);
+  border-bottom: 1px solid var(--gold);
+  opacity: 0;
+  animation: float-diamond 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes float-diamond {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotate(45deg); opacity: 0.15; }
+  50%      { transform: translateX(-50%) translateY(-12px) rotate(45deg); opacity: 0.55; }
+}
+
+/* Floating gold accent dots */
+.accent-dot {
+  position: fixed;
+  width: 3px;
+  height: 3px;
+  background: var(--gold);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  animation: dot-pulse var(--pulse-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--pulse-delay, 0s);
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.08; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(2.2); }
+}
+
+/* ============================================
+   About
+   ============================================ */
+.about {
+  justify-content: center;
+}
+
+.about__grid {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  width: 100%;
+}
+
+.about__text-block {
+  max-width: 480px;
+}
+
+.about__watermark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.about__watermark span {
+  font-family: var(--font-display);
+  font-size: clamp(10rem, 20vw, 18rem);
+  font-weight: 300;
+  color: var(--text);
+  opacity: 0.035;
+  line-height: 1;
+  user-select: none;
+}
+
+.about__body {
+  font-size: 1.05rem;
+  font-weight: 300;
+  line-height: 2.0;
+  color: var(--text-muted);
+}
+
+.about__body p + p {
+  margin-top: 1.2rem;
+}
+
+/* ============================================
+   Projects — Horizontal Scroll
+   ============================================ */
+.projects {
+  flex-direction: column;
+  justify-content: center;
+}
+
+.projects__header {
+  padding: 0 4rem;
+  margin-bottom: 4rem;
+}
+
+.projects__viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.projects__track {
+  display: flex;
+  gap: 6rem;
+  padding: 0 4rem;
+  will-change: transform;
+}
+
+.project-card {
+  flex: 0 0 min(480px, 75vw);
+  padding: 2.5rem;
+  border: 1px solid transparent;
+  transition: border-color 0.4s var(--ease-smooth), transform 0.4s var(--ease-smooth);
+  cursor: none;
+}
+
+.project-card:hover {
+  border-color: var(--gold-dim);
+  transform: translateY(-4px);
+}
+
+.project-card__number {
+  font-family: var(--font-display);
+  font-size: 8rem;
+  font-weight: 300;
+  line-height: 0.8;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(201,169,110,0.3);
+  opacity: 0.55;
+  margin-bottom: -1.8rem;
+  user-select: none;
+}
+
+.project-card__title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 300;
+  margin-bottom: 0.75rem;
+}
+
+.project-card__rule {
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  margin-bottom: 1rem;
+  transition: width 0.4s var(--ease-smooth);
+}
+
+.project-card:hover .project-card__rule {
+  width: 100px;
+}
+
+.project-card__desc {
+  font-size: 0.95rem;
+  font-weight: 300;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+
+.project-card__metrics {
+  display: flex;
+  gap: 2rem;
+}
+
+.project-card__metric {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 300;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
+.project-card__ai-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  padding: 0.15em 0.6em;
+  border-radius: 2px;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+}
+
+.project-card__links {
+  display: flex;
+  gap: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.project-link {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 0.3em 0.8em;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 3px;
+  transition: color 0.3s, border-color 0.3s, background 0.3s;
+}
+
+.project-link:hover {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+  background: rgba(184,148,46,0.04);
+}
+
+.project-link--live {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+}
+
+.project-link--live:hover {
+  color: #fff;
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+/* ============================================
+   Skills — Bento Grid
+   ============================================ */
+.skills__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: minmax(150px, auto);
+  gap: 1.2rem;
+  max-width: 1000px;
+}
+
+.skill-card {
+  background: #FDFBF8;
+  border: 1px solid rgba(0,0,0,0.04);
+  padding: 1.5rem 1.8rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: border-color 0.4s var(--ease-smooth), transform 0.3s var(--ease-smooth), background 0.4s;
+  cursor: none;
+  position: relative;
+}
+
+.skill-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(184,148,46,0.03) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.skill-card:hover {
+  border-color: var(--gold-dim);
+  transform: translateY(-3px);
+  background: #FFFDF9;
+}
+.skill-card:hover::after { opacity: 1; }
+
+.skill-card:nth-child(1) { grid-column: span 3; grid-row: span 1; }
+.skill-card:nth-child(2) { grid-column: span 3; grid-row: span 1; }
+.skill-card:nth-child(3) { grid-column: span 2; grid-row: span 1; }
+.skill-card:nth-child(4) { grid-column: span 2; grid-row: span 1; }
+.skill-card:nth-child(5) { grid-column: span 2; grid-row: span 1; }
+.skill-card:nth-child(6) { grid-column: span 6; grid-row: span 1; }
+
+.skill-card__label {
+  font-size: 0.65rem;
+  font-weight: 300;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.skill-card__name {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 300;
+  margin-bottom: 0.5rem;
+}
+
+.skill-card__items {
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+/* ============================================
+   Quote
+   ============================================ */
+.quote {
+  justify-content: center;
+  text-align: center;
+}
+
+.quote__text {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 300;
+  line-height: 1.4;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.quote__attribution {
+  margin-top: 2.5rem;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 300;
+  color: var(--gold);
+  font-style: normal;
+  opacity: 0.7;
+}
+
+/* ============================================
+   Footer
+   ============================================ */
+.footer {
+  min-height: 30vh;
+  padding: 4rem;
+}
+
+.footer__grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.footer__contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.footer__contact-item {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 300;
+  color: var(--text-muted);
+}
+
+.footer__bullet {
+  width: 4px;
+  height: 4px;
+  background: var(--gold);
+  flex-shrink: 0;
+}
+
+.footer__maker-mark {
+  text-align: right;
+  font-size: 0.6rem;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+/* ============================================
+   Custom Cursor
+   ============================================ */
+.custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(139,126,116,0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  transition: width 0.3s var(--ease-smooth),
+              height 0.3s var(--ease-smooth),
+              border-color 0.3s var(--ease-smooth),
+              background 0.3s var(--ease-smooth);
+}
+
+.custom-cursor--hover {
+  width: 48px;
+  height: 48px;
+  border-color: var(--gold);
+  background: rgba(184,148,46,0.08);
+}
+
+.custom-cursor--view {
+  width: 48px;
+  height: 48px;
+  border-color: var(--gold);
+}
+
+.custom-cursor__plus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--gold);
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-smooth);
+}
+
+.custom-cursor--view .custom-cursor__plus {
+  opacity: 1;
+}
+
+/* ============================================
+   Skip to Content (Accessibility)
+   ============================================ */
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 1rem;
+  z-index: 10000;
+  padding: 0.5rem 1rem;
+  background: var(--gold);
+  color: #fff;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 1rem;
+  cursor: pointer;
+}
+
+/* ============================================
+   Reduced Motion
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .custom-cursor { display: none; }
+  html { cursor: auto; }
+  a { cursor: pointer; }
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 768px) {
+  .section__inner { padding: 4rem 1.5rem; }
+
+  .about__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .about__watermark {
+    display: none;
+  }
+
+  .skills__grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    gap: 1rem;
+  }
+  .skill-card:nth-child(n) { grid-column: span 1; grid-row: span 1; }
+
+  .project-card {
+    flex: 0 0 80vw;
+    padding: 1.5rem;
+  }
+
+  .projects__track {
+    gap: 2rem;
+    padding: 0 1.5rem;
+  }
+
+  .projects__header {
+    padding: 0 1.5rem;
+  }
+
+  .footer {
+    padding: 3rem 1.5rem;
+  }
+
+  .footer__grid {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+
+  .footer__maker-mark {
+    text-align: left;
+  }
+
+  .display--xl {
+    font-size: clamp(2.5rem, 10vw, 4rem);
+  }
+
+  .custom-cursor { display: none; }
+  html { cursor: auto; }
+  a { cursor: pointer; }
+}
+</style>
+</head>
+<body>
+
+<!-- Skip to Content -->
+<a href="#main-content" class="skip-link">Skip to Content</a>
+
+<!-- ============================================
+     Preloader
+     ============================================ -->
+<div class="preloader" id="preloader" aria-hidden="true">
+  <svg class="preloader__canvas" viewBox="0 0 120 120" id="preloader-svg">
+    <!-- V monogram for Vincent -->
+    <path class="preloader__monogram" id="preloader-path-1"
+          d="M 30 25 L 60 85 L 90 25"
+          stroke-dasharray="180" stroke-dashoffset="180" />
+    <path class="preloader__monogram" id="preloader-path-2"
+          d="M 25 25 L 60 40 L 95 25"
+          stroke-dasharray="160" stroke-dashoffset="160" />
+  </svg>
+  <div class="preloader__label" id="preloader-label">Vincent</div>
+</div>
+
+<!-- ============================================
+     Custom Cursor
+     ============================================ -->
+<div class="custom-cursor" id="cursor" aria-hidden="true">
+  <span class="custom-cursor__plus">+</span>
+</div>
+
+<!-- ============================================
+     Main Content
+     ============================================ -->
+<main id="main-content">
+
+  <!-- HERO -->
+  <section class="section hero" id="hero">
+    <canvas class="hero__canvas" id="hero-canvas"></canvas>
+    <div class="hero__ring" id="hero-ring"></div>
+    <div class="hero__content section__inner">
+      <h1 class="hero__name display--xl gold-text--hero" id="hero-name">翟伟鑫</h1>
+      <p class="hero__tagline" id="hero-tagline">Vincent &nbsp;/&nbsp; AI 编程 &nbsp;/&nbsp; 3D 可视化 &nbsp;/&nbsp; 全栈工程</p>
+    </div>
+    <div class="hero__scroll-indicator" id="hero-scroll"></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="section about section--warm section--accented section--divider" id="about">
+    <div class="section__inner">
+      <div class="about__grid">
+        <div class="about__text-block">
+          <p class="uppercase text--gold" style="font-size:0.65rem;font-weight:300;letter-spacing:0.3em;margin-bottom:1rem;">关于</p>
+          <div class="golden-rule"></div>
+          <div class="about__body" id="about-body">
+            <p class="drop-cap">Vincent，大数据专业大二，从 Python 单机游戏起步，逐步进阶到 3D 粒子渲染、AI 长链推理与 Agent 编排。每个项目都在上一阶段基础上拓展新技术领域。</p>
+            <p>核心能力集中在 AI 编程、Three.js 3D 可视化、WebSocket 实时通信与 PWA 离线架构——追求算法与工程之间的精确平衡。</p>
+          </div>
+        </div>
+        <div class="about__watermark" id="about-watermark">
+          <span>02</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROJECTS (Horizontal Scroll) -->
+  <section class="section projects section--cream" id="projects">
+    <div class="projects__header">
+      <p class="uppercase text--gold" style="font-size:0.65rem;font-weight:300;letter-spacing:0.3em;margin-bottom:0.5rem;">项目</p>
+      <h2 class="display--lg">Selected Works</h2>
+    </div>
+    <div class="projects__viewport" id="projects-viewport">
+      <div class="projects__track" id="projects-track">
+        <!-- Cards rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- SKILLS -->
+  <section class="section skills section--warm section--accented section--divider" id="skills">
+    <div class="section__inner">
+      <p class="uppercase text--gold" style="font-size:0.65rem;font-weight:300;letter-spacing:0.3em;margin-bottom:3rem;">技能域</p>
+      <div class="skills__grid" id="skills-grid">
+        <!-- Cards rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- QUOTE -->
+  <section class="section quote section--cream" id="quote">
+    <div class="section__inner">
+      <p class="quote__text" id="quote-text">
+        "AI 不是替代人，而是放大人的创造力。"
+      </p>
+      <p class="quote__attribution" id="quote-author">— Vincent</p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer section--warm" id="footer">
+    <div class="footer__grid">
+      <div class="footer__contact">
+        <span class="footer__contact-item">
+          <span class="footer__bullet"></span> 3320780962@QQ.com
+        </span>
+        <span class="footer__contact-item">
+          <span class="footer__bullet"></span> jrickjrick27@gmail.com
+        </span>
+        <span class="footer__contact-item">
+          <span class="footer__bullet"></span> github.com/jjrick62
+        </span>
+      </div>
+      <div class="footer__maker-mark">
+        Vincent Zhai &nbsp;·&nbsp; Designed with precision &nbsp;·&nbsp; 2026
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating accent dots -->
+  <span class="accent-dot" style="top:15%;left:8%;--pulse-dur:2.8s;--pulse-delay:0s;"></span>
+  <span class="accent-dot" style="top:25%;right:12%;--pulse-dur:3.4s;--pulse-delay:0.8s;"></span>
+  <span class="accent-dot" style="top:55%;left:6%;--pulse-dur:3.1s;--pulse-delay:1.6s;"></span>
+  <span class="accent-dot" style="top:65%;right:8%;--pulse-dur:2.5s;--pulse-delay:0.4s;"></span>
+  <span class="accent-dot" style="top:80%;left:15%;--pulse-dur:3.7s;--pulse-delay:2s;"></span>
+  <span class="accent-dot" style="top:90%;right:18%;--pulse-dur:2.9s;--pulse-delay:1.2s;"></span>
+
+</main>
+
+<!-- ============================================
+     External Dependencies
+     ============================================ -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
+
+<!-- ============================================
+     Application — Object-Oriented Architecture
+     ============================================ -->
+<script>
+'use strict';
+
+// ============================================================
+// CLASS: Preloader — 仪式之门
+// ============================================================
+class Preloader {
+  constructor() {
+    this.el = document.getElementById('preloader');
+    this.path1 = document.getElementById('preloader-path-1');
+    this.path2 = document.getElementById('preloader-path-2');
+    this.label = document.getElementById('preloader-label');
+    this._onComplete = null;
+  }
+
+  animate() {
+    return new Promise((resolve) => {
+      this._onComplete = resolve;
+
+      // Ensure initial state via CSS style (not just SVG attribute)
+      this.path1.style.strokeDashoffset = '180';
+      this.path2.style.strokeDashoffset = '160';
+
+      // Double-RAF ensures initial state is rendered before transition triggers
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Phase 1: Draw lines (0s → 1.2s)
+          this.path1.style.transition = 'stroke-dashoffset 0.9s cubic-bezier(0.65,0,0.35,1)';
+          this.path1.style.strokeDashoffset = '0';
+          this.path2.style.transition = 'stroke-dashoffset 0.9s cubic-bezier(0.65,0,0.35,1) 0.25s';
+          this.path2.style.strokeDashoffset = '0';
+        });
+      });
+
+      // Phase 2: Show label (1.0s)
+      setTimeout(() => {
+        this.label.classList.add('preloader__label--visible');
+      }, 1000);
+
+      // Phase 3: Fade out (2.0s)
+      setTimeout(() => {
+        this.destroy();
+      }, 2200);
+    });
+  }
+
+  destroy() {
+    this.el.classList.add('preloader--hidden');
+    // Resolve immediately for smooth crossfade with body content
+    if (this._onComplete) this._onComplete();
+    setTimeout(() => {
+      this.el.remove();
+    }, 700);
+  }
+}
+
+// ============================================================
+// CLASS: ParticleConstellation — Three.js 金色粒子星座
+// ============================================================
+class ParticleConstellation {
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    this.scene = null;
+    this.camera = null;
+    this.renderer = null;
+    this.particles = null;
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.targetX = 0;
+    this.targetY = 0;
+    this.animId = null;
+  }
+
+  init() {
+    const { innerWidth: w, innerHeight: h } = window;
+
+    // Scene
+    this.scene = new THREE.Scene();
+
+    // Camera
+    this.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
+    this.camera.position.z = 5;
+
+    // Renderer
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Particles — spherical constellation
+    const count = 900;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      // Fibonacci sphere distribution for natural look
+      const phi = Math.acos(1 - 2 * (i + 0.5) / count);
+      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+      const r = 2.2 + (Math.random() - 0.5) * 0.6;
+
+      positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i * 3 + 2] = r * Math.cos(phi);
+      sizes[i] = Math.random() * 2.5 + 0.5;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    // Material — golden glow
+    const material = new THREE.PointsMaterial({
+      color: 0xB8942E,
+      size: 0.008,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.NormalBlending,
+      depthWrite: false
+    });
+
+    this.particles = new THREE.Points(geometry, material);
+    this.scene.add(this.particles);
+
+    // Ambient stars
+    const starGeo = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(200 * 3);
+    for (let i = 0; i < 200; i++) {
+      starPositions[i * 3]     = (Math.random() - 0.5) * 8;
+      starPositions[i * 3 + 1] = (Math.random() - 0.5) * 8;
+      starPositions[i * 3 + 2] = (Math.random() - 0.5) * 4;
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: 0xB8A898,
+      size: 0.003,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.NormalBlending,
+      depthWrite: false
+    });
+    const stars = new THREE.Points(starGeo, starMat);
+    this.scene.add(stars);
+    this._stars = stars;
+
+    // Constellation lines — connect nearby particles
+    const lineGeo = new THREE.BufferGeometry();
+    const lineVertices = [];
+    const sampleStep = 15;
+    const threshold = 1.1;
+    for (let i = 0; i < count; i += sampleStep) {
+      for (let j = i + sampleStep; j < count; j += sampleStep) {
+        const dx = positions[i * 3] - positions[j * 3];
+        const dy = positions[i * 3 + 1] - positions[j * 3 + 1];
+        const dz = positions[i * 3 + 2] - positions[j * 3 + 2];
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < threshold && Math.random() < 0.25) {
+          lineVertices.push(
+            positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2],
+            positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2]
+          );
+        }
+      }
+    }
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineVertices), 3));
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0xB8942E,
+      transparent: true,
+      opacity: 0.06,
+      depthWrite: false
+    });
+    const lines = new THREE.LineSegments(lineGeo, lineMat);
+    this.particles.add(lines);
+
+    // Event listeners
+    this._onMouseMove = this._onMouseMove.bind(this);
+    this._onResize = this._onResize.bind(this);
+    window.addEventListener('mousemove', this._onMouseMove, { passive: true });
+    window.addEventListener('resize', this._onResize);
+
+    // Start render loop
+    this._animate();
+  }
+
+  _animate() {
+    this.animId = requestAnimationFrame(() => this._animate());
+
+    // Smooth mouse following
+    this.targetX += (this.mouseX - this.targetX) * 0.05;
+    this.targetY += (this.mouseY - this.targetY) * 0.05;
+
+    // Rotate main constellation
+    if (this.particles) {
+      this.particles.rotation.y += 0.0003;
+      this.particles.rotation.x += (this.targetY * 0.1 - this.particles.rotation.x) * 0.02;
+      this.particles.rotation.z += (this.targetX * 0.08 - this.particles.rotation.z) * 0.02;
+    }
+
+    // Counter-rotate stars for depth
+    if (this._stars) {
+      this._stars.rotation.y -= 0.0001;
+    }
+
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  _onMouseMove(e) {
+    this.mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+    this.mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+  }
+
+  _onResize() {
+    const { innerWidth: w, innerHeight: h } = window;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.animId);
+    window.removeEventListener('mousemove', this._onMouseMove);
+    window.removeEventListener('resize', this._onResize);
+    if (this.renderer) {
+      this.renderer.dispose();
+      this.scene.clear();
+    }
+  }
+}
+
+// ============================================================
+// CLASS: CustomCursor — 自定义光标
+// ============================================================
+class CustomCursor {
+  constructor() {
+    this.el = document.getElementById('cursor');
+    this._x = 0;
+    this._y = 0;
+    this._cx = 0;
+    this._cy = 0;
+    this._raf = null;
+    this._isMobile = window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  init() {
+    if (this._isMobile) return;
+
+    this._onMouseMove = (e) => {
+      this._x = e.clientX;
+      this._y = e.clientY;
+    };
+
+    document.addEventListener('mousemove', this._onMouseMove, { passive: true });
+    this._loop();
+
+    // Hover state detection
+    document.querySelectorAll('a, .project-card, .skill-card, [data-cursor-hover]').forEach(el => {
+      el.addEventListener('mouseenter', () => this.setState('hover'));
+      el.addEventListener('mouseleave', () => this.setState('default'));
+    });
+
+    document.querySelectorAll('.project-card').forEach(el => {
+      el.addEventListener('mouseenter', () => this.setState('view'));
+      el.addEventListener('mouseleave', () => this.setState('default'));
+    });
+
+    // Hide cursor when leaving window
+    document.addEventListener('mouseleave', () => { this.el.style.opacity = '0'; });
+    document.addEventListener('mouseenter', () => { this.el.style.opacity = '1'; });
+  }
+
+  setState(state) {
+    this.el.classList.remove('custom-cursor--hover', 'custom-cursor--view');
+    if (state === 'hover') this.el.classList.add('custom-cursor--hover');
+    if (state === 'view') this.el.classList.add('custom-cursor--view');
+  }
+
+  _loop() {
+    this._cx += (this._x - this._cx) * 0.13;
+    this._cy += (this._y - this._cy) * 0.13;
+    this.el.style.transform = `translate3d(${this._cx - 10}px, ${this._cy - 10}px, 0)`;
+    this._raf = requestAnimationFrame(() => this._loop());
+  }
+
+  destroy() {
+    cancelAnimationFrame(this._raf);
+  }
+}
+
+// ============================================================
+// CLASS: ProjectCards — 项目数据 + 卡片渲染
+// ============================================================
+class ProjectCards {
+  constructor() {
+    this.track = document.getElementById('projects-track');
+    this.projects = [
+      {
+        num: '01',
+        title: 'Claude Code Mobile Bridge',
+        desc: '将桌面 Claude Code CLI 包装为手机浏览器可远程操控的 AI Agent 服务。Flask-SocketIO WebSocket 全双工通道 + subprocess 编排，Agent 上下文永不中断。',
+        metrics: ['AI Agent 编排', 'WebSocket', 'Python Flask'],
+        github: 'https://github.com/jjrick62/claude-mobile-chat',
+        ai: true
+      },
+      {
+        num: '02',
+        title: 'AI 模拟面试官',
+        desc: '以虚拟主播为形象的 AI 面试系统。STAR 行为面试法长链推理，双阶段 AI 调用——问题生成 + 结构化分析，JSON Schema 约束输出，动态难度调节。',
+        metrics: ['Prompt Engineering', '长链推理', 'React + Vite'],
+        github: 'https://github.com/jjrick62/taffy-interviewer-web',
+        ai: true
+      },
+      {
+        num: '03',
+        title: 'Gesture Earth — 手势控制 3D 地球',
+        desc: 'MediaPipe Hands 21 关键点实时追踪 → 纯几何规则手势分类 → 确定性 3D 操作映射。卡尔曼滤波平滑抖动，无摄像头优雅降级键鼠模式。',
+        metrics: ['计算机视觉', '手势识别', 'Three.js'],
+        github: 'https://github.com/jjrick62/gesture-earth-demo',
+        pages: 'https://jjrick62.github.io/gesture-earth-demo/',
+        ai: true
+      },
+      {
+        num: '04',
+        title: '3D 粒子地球旅行相册',
+        desc: '30 万+粒子渲染全球海岸线与五级行政区划边界。GeoJSON → 球面坐标投影，四叉树空间索引聚类，PWA 全离线。3200+ 中国城市搜索。',
+        metrics: ['Three.js', 'PWA', 'IndexedDB'],
+        github: 'https://github.com/jjrick62/travel-album-3d',
+        pages: 'https://jjrick62.github.io/travel-album-3d/'
+      },
+      {
+        num: '05',
+        title: '五子棋联机对战',
+        desc: 'WebSocket 权威服务端状态同步，四方向扫描增量式胜负判定，状态机管理房间生命周期。多房间并行，断线重连。',
+        metrics: ['Node.js', 'WebSocket', 'Canvas'],
+        github: 'https://github.com/jjrick62/gomoku-online'
+      },
+      {
+        num: '06',
+        title: '算术闹钟',
+        desc: 'Flutter 算术解锁闹钟——答对 5 道随机加减法题才能关闭。Android 悬浮窗闹钟界面 + 通知栏常驻，自定义铃声，Watchdog 心跳防崩溃，AppLifecycle 状态感知自动恢复。',
+        metrics: ['Flutter', 'Dart', 'Android'],
+        github: 'https://github.com/jjrick62/alarm_math_app'
+      }
+    ];
+  }
+
+  render() {
+    this.track.innerHTML = this.projects.map(p => `
+      <article class="project-card">
+        <div class="project-card__number">${p.num}</div>
+        ${p.ai ? '<span class="project-card__ai-badge">AI</span>' : ''}
+        <h3 class="project-card__title">${p.title}</h3>
+        <div class="project-card__rule"></div>
+        <p class="project-card__desc">${p.desc}</p>
+        <div class="project-card__links">
+          ${p.github ? `<a href="${p.github}" target="_blank" rel="noopener" class="project-link">GitHub</a>` : ''}
+          ${p.pages ? `<a href="${p.pages}" target="_blank" rel="noopener" class="project-link project-link--live">Live</a>` : ''}
+        </div>
+        <div class="project-card__metrics">
+          ${p.metrics.map(m => `<span class="project-card__metric">${m}</span>`).join('')}
+        </div>
+      </article>
+    `).join('');
+
+    // Update cursor listeners for new cards
+    if (window._cursor) {
+      this.track.querySelectorAll('.project-card').forEach(el => {
+        el.addEventListener('mouseenter', () => window._cursor.setState('view'));
+        el.addEventListener('mouseleave', () => window._cursor.setState('default'));
+      });
+    }
+  }
+
+  getTrackWidth() {
+    return this.track.scrollWidth;
+  }
+}
+
+// ============================================================
+// CLASS: Skills — 技能域卡片
+// ============================================================
+class Skills {
+  constructor() {
+    this.grid = document.getElementById('skills-grid');
+    this.skills = [
+      { label: '01', name: 'AI / LLM', items: 'Prompt Engineering · 长链推理 · Agent 编排 · JSON Schema 约束输出 · 双阶段 AI 调用' },
+      { label: '02', name: '3D 渲染 & 可视化', items: 'Three.js · WebGL · Canvas · BufferGeometry 粒子系统 · GeoJSON 球面投影' },
+      { label: '03', name: '前端工程', items: 'React · TypeScript · Vite · Framer Motion · PWA · Service Worker' },
+      { label: '04', name: '后端 & 网络', items: 'Node.js · Python Flask · WebSocket · Flask-SocketIO · REST API · HTTP 代理' },
+      { label: '05', name: '计算机视觉', items: 'MediaPipe Hands · 手势识别 · 卡尔曼滤波 · 关键点追踪 · 纯几何规则分类' },
+      { label: '06', name: '跨平台 & 工具', items: 'Flutter · Dart · Git · GitHub Pages · 响应式三断点 · 移动端适配' }
+    ];
+  }
+
+  render() {
+    this.grid.innerHTML = this.skills.map(s => `
+      <div class="skill-card">
+        <div class="skill-card__label">${s.label}</div>
+        <h3 class="skill-card__name">${s.name}</h3>
+        <p class="skill-card__items">${s.items}</p>
+      </div>
+    `).join('');
+  }
+}
+
+// ============================================================
+// CLASS: SmoothScroll — Lenis 平滑滚动
+// ============================================================
+class SmoothScroll {
+  constructor() {
+    this.lenis = null;
+  }
+
+  init() {
+    this.lenis = new Lenis({
+      duration: 1.3,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+      wheelMultiplier: 0.9,
+      touchMultiplier: 1.5
+    });
+
+    // Integrate with GSAP ticker
+    gsap.ticker.add((time) => {
+      this.lenis.raf(time * 1000);
+    });
+    gsap.ticker.lagSmoothing(0);
+
+    // Sync with ScrollTrigger
+    this.lenis.on('scroll', () => {
+      ScrollTrigger.update();
+    });
+  }
+
+  start() {
+    if (this.lenis) this.lenis.start();
+  }
+
+  stop() {
+    if (this.lenis) this.lenis.stop();
+  }
+}
+
+// ============================================================
+// CLASS: ScrollAnimations — GSAP 滚动动画
+// ============================================================
+class ScrollAnimations {
+  constructor() {
+    this.triggers = [];
+  }
+
+  initHeroEntry() {
+    const tl = gsap.timeline({ delay: 0.3 });
+    tl.to('#hero-name', { opacity: 1, y: 0, duration: 1.3, ease: 'power2.out' }, 0)
+      .to('#hero-tagline', { opacity: 1, y: 0, duration: 1.0, ease: 'power2.out' }, 0.35)
+      .to('#hero-scroll', { opacity: 1, duration: 0.8, ease: 'power2.out' }, 0.7)
+      .to('#hero-ring', { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.2);
+
+    // Hero ring fades out on scroll
+    gsap.to('#hero-ring', {
+      scrollTrigger: {
+        trigger: '#about',
+        start: 'top 80%',
+        toggleActions: 'play none none reverse'
+      },
+      opacity: 0,
+      scale: 1.3,
+      duration: 0.8,
+      ease: 'power2.in'
+    });
+  }
+
+  initAboutParallax() {
+    const st = ScrollTrigger.create({
+      trigger: '#about',
+      start: 'top bottom',
+      end: 'bottom top',
+      scrub: 1,
+      onUpdate: (self) => {
+        const y = self.progress * 80;
+        gsap.set('#about-watermark span', { y: y });
+      }
+    });
+    this.triggers.push(st);
+
+    // Text stagger
+    gsap.from('#about-body p', {
+      scrollTrigger: {
+        trigger: '#about',
+        start: 'top 70%',
+        toggleActions: 'play none none reverse'
+      },
+      opacity: 0,
+      y: 30,
+      duration: 0.8,
+      stagger: 0.2,
+      ease: 'power2.out'
+    });
+
+    gsap.from('.golden-rule', {
+      scrollTrigger: {
+        trigger: '#about',
+        start: 'top 70%',
+        toggleActions: 'play none none reverse'
+      },
+      scaleX: 0,
+      duration: 0.8,
+      ease: 'power2.out',
+      transformOrigin: 'left center'
+    });
+  }
+
+  initProjectsHorizontal() {
+    const track = document.getElementById('projects-track');
+    const cards = track.querySelectorAll('.project-card');
+    const getDistance = () => track.scrollWidth - window.innerWidth;
+
+    gsap.to(track, {
+      x: () => -getDistance(),
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '#projects',
+        pin: true,
+        scrub: 1,
+        snap: {
+          snapTo: 1 / (cards.length - 1),
+          duration: { min: 0.2, max: 0.4 },
+          ease: 'power2.inOut'
+        },
+        end: () => `+=${getDistance()}`,
+        invalidateOnRefresh: true
+      }
+    });
+  }
+
+  initReveals() {
+    // Skills stagger
+    gsap.from('.skill-card', {
+      scrollTrigger: {
+        trigger: '#skills',
+        start: 'top 65%',
+        toggleActions: 'play none none reverse'
+      },
+      opacity: 0,
+      y: 40,
+      duration: 0.7,
+      stagger: 0.1,
+      ease: 'power2.out'
+    });
+
+    // Quote slow reveal
+    gsap.from('#quote-text', {
+      scrollTrigger: {
+        trigger: '#quote',
+        start: 'top 70%',
+        toggleActions: 'play none none reverse'
+      },
+      opacity: 0,
+      scale: 0.97,
+      duration: 1.5,
+      ease: 'power2.out'
+    });
+
+    gsap.from('#quote-author', {
+      scrollTrigger: {
+        trigger: '#quote',
+        start: 'top 65%',
+        toggleActions: 'play none none reverse'
+      },
+      opacity: 0,
+      y: 10,
+      duration: 0.8,
+      delay: 0.3,
+      ease: 'power2.out'
+    });
+
+    // Footer
+    gsap.from('#footer .footer__grid', {
+      scrollTrigger: {
+        trigger: '#footer',
+        start: 'top 85%',
+        toggleActions: 'play none none reverse'
+      },
+      opacity: 0,
+      y: 20,
+      duration: 0.8,
+      ease: 'power2.out'
+    });
+  }
+
+  refresh() {
+    ScrollTrigger.refresh();
+  }
+}
+
+// ============================================================
+// CLASS: LuxuryPortfolio — 主控制器
+// ============================================================
+class LuxuryPortfolio {
+  constructor() {
+    this.preloader = new Preloader();
+    this.particles = new ParticleConstellation('hero-canvas');
+    this.cursor = new CustomCursor();
+    this.projectCards = new ProjectCards();
+    this.skills = new Skills();
+    this.smoothScroll = new SmoothScroll();
+    this.scrollAnimations = new ScrollAnimations();
+  }
+
+  async init() {
+    // Expose cursor for dynamic elements
+    window._cursor = this.cursor;
+
+    // Phase 1: Preloader
+    await this.preloader.animate();
+
+    // Phase 2: Reveal body
+    document.body.classList.add('loaded');
+
+    // Phase 3: Render content (before cursor so it can find cards)
+    this.projectCards.render();
+    this.skills.render();
+
+    // Phase 4: Initialize particle system
+    this.particles.init();
+
+    // Phase 5: Initialize cursor (now cards exist in DOM)
+    this.cursor.init();
+
+    // Phase 6: Initialize smooth scroll
+    this.smoothScroll.init();
+
+    // Phase 7: Hero entry animation
+    this.scrollAnimations.initHeroEntry();
+
+    // Phase 8: Setup scroll-driven animations (deferred for DOM)
+    requestAnimationFrame(() => {
+      this.scrollAnimations.initAboutParallax();
+      this.scrollAnimations.initProjectsHorizontal();
+      this.scrollAnimations.initReveals();
+    });
+
+    // Phase 9: Force ScrollTrigger refresh after everything settles
+    setTimeout(() => {
+      this.scrollAnimations.refresh();
+    }, 500);
+
+    // Handle dynamic resizes
+    window.addEventListener('resize', () => {
+      clearTimeout(this._resizeTimeout);
+      this._resizeTimeout = setTimeout(() => {
+        this.scrollAnimations.refresh();
+      }, 200);
+    });
+
+    console.log('%c Portfolio Ready %c— The Quiet Architecture of Data ',
+      'color:#C9A96E;font-size:1.2em;', 'color:#7A7168;');
+  }
+}
+
+// ============================================================
+// BOOTSTRAP
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  gsap.registerPlugin(ScrollTrigger);
+  const app = new LuxuryPortfolio();
+  app.init();
+});
+</script>
+
+</body>
+</html>
