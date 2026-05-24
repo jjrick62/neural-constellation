@@ -38,23 +38,45 @@
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     color: rgba(212,168,67,0.9); font-size: 14px; font-weight: 300;
   }
+  #dev-panel {
+    position: fixed; top: 16px; right: 16px; z-index: 10000;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #cam-toggle {
+    background: rgba(0,0,0,0.7); border: 1px solid rgba(212,168,67,0.5);
+    color: #D4A843; padding: 8px 16px; border-radius: 6px;
+    font-family: monospace; font-size: 13px; cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  #cam-toggle:hover { background: rgba(212,168,67,0.15); border-color: #D4A843; }
+  #cam-toggle.active { background: rgba(212,168,67,0.2); border-color: #D4A843; color: #fff; }
+  #fly-hint {
+    display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 10000; background: rgba(0,0,0,0.8); border: 1px solid rgba(212,168,67,0.4);
+    border-radius: 8px; padding: 12px 20px;
+    color: #B8942E; font-family: monospace; font-size: 12px;
+    pointer-events: none; white-space: nowrap;
+  }
+  #fly-hint.visible { display: block; }
 </style>
 </head>
 <body>
   <div id="stage-container"></div>
   <div id="preloader"></div>
+  <div id="dev-panel">
+    <button id="cam-toggle">SCROLL</button>
+  </div>
+  <div id="fly-hint">W/S 进退 · A/D 平移 · Q/E 转头 · R 仰/T 俯 · Space/Shift 升降 · 滚轮进退</div>
   <div id="cursor" class="cursor"><span class="cursor__plus">+</span></div>
 
-  <!-- CDN Dependencies -->
   <script type="importmap">
   { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 
-  <!-- ===== 1. 数据层 ===== -->
+  <!-- ===== 数据层 ===== -->
   <script>
-  // ===== 1. 数据层 =====
   const COLORS = {
     bg:           '#000000',
     mainGold:     '#D4A843',
@@ -67,8 +89,7 @@
 
   const DataModel = {
     personal: {
-      nameCn: '翟伟鑫',
-      nameEn: 'Vincent',
+      nameCn: '翟伟鑫', nameEn: 'Vincent',
       email: ['3320780962@QQ.com', 'jrickjrick27@gmail.com'],
       github: 'https://github.com/jjrick62',
       quote: 'AI 不是替代人，而是放大人的创造力。'
@@ -114,69 +135,19 @@
   };
   </script>
 
-  <!-- ===== 2. Shader 库 ===== -->
-  <script>
-  // ===== 2. Shader 库 =====
-  const ShaderLib = {
-    particleVS: `
-      attribute float aSize;
-      uniform float uPointScale;
-      void main() {
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = aSize * uPointScale * (300.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-
-    particleVS_color: `
-      attribute float aSize;
-      attribute vec3 aColor;
-      varying vec3 vColor;
-      uniform float uPointScale;
-      void main() {
-        vColor = aColor;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = aSize * uPointScale * (300.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-
-    particleFS: `
-      varying vec3 vColor;
-      void main() {
-        float d = length(gl_PointCoord - 0.5) * 2.0;
-        float alpha = 1.0 - smoothstep(0.0, 1.0, d);
-        alpha *= 0.8;
-        gl_FragColor = vec4(vColor, alpha);
-      }
-    `,
-
-    particleFS_white: `
-      void main() {
-        float d = length(gl_PointCoord - 0.5) * 2.0;
-        float alpha = 1.0 - smoothstep(0.0, 1.0, d);
-        alpha *= 0.9;
-        gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
-      }
-    `,
-
-    glowFS: `
-      varying vec3 vNormal;
-      uniform vec3 uColor;
-      void main() {
-        float fresnel = 1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0)));
-        float intensity = pow(fresnel, 3.0);
-        gl_FragColor = vec4(uColor, intensity * 1.5);
-      }
-    `,
-  };
-  </script>
-
-  <!-- ===== 5. 调度层 ===== -->
+  <!-- ===== 主程序 ===== -->
   <script type="module">
-  // ===== 5. 调度层 =====
   import * as THREE from 'three';
 
+  // ===== 圆柱参数 =====
+  const CYLINDER = {
+    R_INNER: 4.0,
+    H_TOTAL: 24.0,
+    Y_MIN: -10,
+    Y_MAX: 14,
+  };
+
+  // ===== Stage =====
   class Stage {
     constructor(containerId) {
       this._container = document.getElementById(containerId);
@@ -194,21 +165,21 @@
       this.scene = new THREE.Scene();
       this.scene.background = new THREE.Color('#000000');
 
-      const ambientLight = new THREE.AmbientLight(0x222233, 1.5);
+      const ambientLight = new THREE.AmbientLight(0x111122, 1.5);
       this.scene.add(ambientLight);
       const pointLight = new THREE.PointLight(0xD4A843, 30, 30);
-      pointLight.position.set(0, 5, 10);
+      pointLight.position.set(0, 0, 3);
       this.scene.add(pointLight);
-      const pointLight2 = new THREE.PointLight(0x886622, 15, 25);
-      pointLight2.position.set(-5, -2, 5);
+      const pointLight2 = new THREE.PointLight(0xB8942E, 15, 25);
+      pointLight2.position.set(0, -3, 0);
       this.scene.add(pointLight2);
 
       this.camera = new THREE.PerspectiveCamera(45, this._width / this._height, 0.1, 100);
-      this.camera.position.set(0, 0, 20);
+      this.camera.position.set(0, -8, 3.5);
+      this.camera.lookAt(0, -6, 0);
 
       this.clock = new THREE.Clock();
       this._events = {};
-      this._sceneIndex = 0;
 
       this._onResize = () => {
         this._width = window.innerWidth;
@@ -223,36 +194,23 @@
 
     on(event, fn) { (this._events[event] ||= []).push(fn); }
     emit(event, data) { (this._events[event] || []).forEach(fn => fn(data)); }
-
-    get currentSceneIndex() { return this._sceneIndex; }
   }
 
   // ===== MouseManager =====
   class MouseManager {
-    constructor(canvas) {
-      this._canvas = canvas;
+    constructor() {
       this.normalized = { x: 0, y: 0 };
       this.screen = { x: 0, y: 0 };
       this.velocity = { x: 0, y: 0 };
-      this.ripple = { x: 0, y: 0, strength: 0 };
-      this._prevX = 0;
-      this._prevY = 0;
+      this._prevX = 0; this._prevY = 0;
 
       this._onMove = (e) => {
         this.screen.x = e.clientX;
         this.screen.y = e.clientY;
         this.normalized.x = (e.clientX / window.innerWidth) * 2 - 1;
         this.normalized.y = -(e.clientY / window.innerHeight) * 2 + 1;
-        this.ripple.x = this.normalized.x;
-        this.ripple.y = this.normalized.y;
       };
-
-      this._onLeave = () => {
-        this.ripple.strength = 0;
-      };
-
       window.addEventListener('mousemove', this._onMove, { passive: true });
-      window.addEventListener('mouseleave', this._onLeave);
     }
 
     update() {
@@ -260,215 +218,147 @@
       this.velocity.y = this.normalized.y - this._prevY;
       this._prevX = this.normalized.x;
       this._prevY = this.normalized.y;
-      const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-      this.ripple.strength = Math.min(speed * 3, 1.0);
     }
 
-    dispose() {
-      window.removeEventListener('mousemove', this._onMove);
-      window.removeEventListener('mouseleave', this._onLeave);
-    }
+    dispose() { window.removeEventListener('mousemove', this._onMove); }
   }
 
-  // ===== CameraController =====
-  class CameraController {
-    constructor(camera) {
-      this._camera = camera;
-      this._keyframes = [];
-      this._currentPos = new THREE.Vector3();
-      this._currentLookAt = new THREE.Vector3();
-      this._currentFov = 45;
-    }
-
-    addKeyframe(progress, position, lookAt, fov = 45) {
-      this._keyframes.push({
-        progress: THREE.MathUtils.clamp(progress, 0, 1),
-        position: position.clone(),
-        lookAt: lookAt.clone(),
-        fov
-      });
-      this._keyframes.sort((a, b) => a.progress - b.progress);
-    }
-
-    update(scrollProgress) {
-      const t = THREE.MathUtils.clamp(scrollProgress, 0, 1);
-      let prev = this._keyframes[0];
-      let next = this._keyframes[this._keyframes.length - 1];
-      for (let i = 0; i < this._keyframes.length - 1; i++) {
-        if (t >= this._keyframes[i].progress && t <= this._keyframes[i + 1].progress) {
-          prev = this._keyframes[i];
-          next = this._keyframes[i + 1];
-          break;
-        }
-      }
-      const range = next.progress - prev.progress;
-      const localT = range > 0 ? (t - prev.progress) / range : 0;
-      const ease = localT < 0.5 ? 2 * localT * localT : 1 - Math.pow(-2 * localT + 2, 2) / 2;
-      this._currentPos.lerpVectors(prev.position, next.position, ease);
-      this._currentLookAt.lerpVectors(prev.lookAt, next.lookAt, ease);
-      this._currentFov = THREE.MathUtils.lerp(prev.fov, next.fov, ease);
-      this._camera.position.copy(this._currentPos);
-      this._camera.lookAt(this._currentLookAt);
-      this._camera.fov = this._currentFov;
-      this._camera.updateProjectionMatrix();
-    }
-
-    getPosition() { return this._camera.position.clone(); }
-    getTarget() { return this._currentLookAt.clone(); }
-  }
-
-  // ===== StarfieldBackground — 外部光源照亮固定粒子，非自发光 =====
+  // ===== StarfieldBackground =====
   class StarfieldBackground {
-    constructor(scene, count = 150000) {
+    constructor(scene, count = 120000) {
       this._scene = scene;
       this._count = count;
 
-      // ===== 聚类中心：粒子围绕这些点呈高斯分布 =====
-      const clusters = [
-        { x: 0, y: 0, z: 0, weight: 0.25, spread: 15 },
-        { x: 0, y: 4, z: 0, weight: 0.20, spread: 10 },
-        { x: 0, y: 7, z: 0, weight: 0.20, spread: 10 },
-        { x: -4, y: 2, z: -2, weight: 0.15, spread: 12 },
-        { x: 4, y: 5, z: -2, weight: 0.10, spread: 12 },
-        { x: 0, y: -3, z: 0, weight: 0.10, spread: 18 },
+      // 四分区权重（Z0:20% Z1:28% Z2:36% Z3:16%）
+      const zones = [
+        { yMin: -10, yMax: -4, weight: 0.20 },
+        { yMin:  -4, yMax:  2, weight: 0.28 },
+        { yMin:   2, yMax:  8, weight: 0.36 },
+        { yMin:   8, yMax: 14, weight: 0.16 },
       ];
 
       const positions = new Float32Array(count * 3);
       const sizes = new Float32Array(count);
-      const worldPosStore = new Float32Array(count * 3); // 存世界坐标给光照计算
+      const worldPosStore = new Float32Array(count * 3);
 
-      // 高斯随机数生成器 (Box-Muller)
-      function gaussRandom() {
-        let u = 0, v = 0;
-        while (u === 0) u = Math.random();
-        while (v === 0) v = Math.random();
-        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-      }
+      const R_MAX = CYLINDER.R_INNER;
+      const R_MIN = 0.3;
 
       for (let i = 0; i < count; i++) {
-        // 按权重随机选一个聚类中心
-        let r = Math.random();
-        let c = clusters[0];
-        let acc = 0;
-        for (const cl of clusters) {
-          acc += cl.weight;
-          if (r <= acc) { c = cl; break; }
-        }
+        // 1. 按权重选分区
+        const zr = Math.random();
+        let zone = zones[0];
+        let zacc = 0;
+        for (const z of zones) { zacc += z.weight; if (zr <= zacc) { zone = z; break; } }
 
-        // 高斯偏移
-        const ox = gaussRandom() * c.spread;
-        const oy = gaussRandom() * c.spread;
-        const oz = gaussRandom() * c.spread;
+        // 2. 柱坐标生成 Y：区内均匀 + 边界高斯羽化
+        const ySpan = zone.yMax - zone.yMin;
+        const yMid = (zone.yMin + zone.yMax) / 2;
+        const wy = yMid + (Math.random() - 0.5) * ySpan * 1.1;
+        const wyClamped = THREE.MathUtils.clamp(wy, CYLINDER.Y_MIN, CYLINDER.Y_MAX);
 
-        const wx = c.x + ox;
-        const wy = c.y + oy;
-        const wz = c.z + oz;
+        // 3. 柱坐标生成 θ：均匀分布
+        const theta = Math.random() * Math.PI * 2;
+
+        // 4. 柱坐标生成 r：偏向壁面（r² 分布，外密内疏）
+        const rr = R_MIN + (R_MAX - R_MIN) * Math.sqrt(Math.random());
+
+        // 5. 柱坐标 → 笛卡尔
+        const wx = rr * Math.cos(theta);
+        const wz = rr * Math.sin(theta);
 
         positions[i * 3] = wx;
-        positions[i * 3 + 1] = wy;
+        positions[i * 3 + 1] = wyClamped;
         positions[i * 3 + 2] = wz;
         worldPosStore[i * 3] = wx;
-        worldPosStore[i * 3 + 1] = wy;
+        worldPosStore[i * 3 + 1] = wyClamped;
         worldPosStore[i * 3 + 2] = wz;
 
-        // ===== 粒子大小 = 基础值 + 小比例伪随机噪声 =====
-        const distFromCenter = Math.sqrt(ox*ox + oy*oy + oz*oz);
-        const baseSize = 0.08 - (distFromCenter / c.spread) * 0.05;
+        // 6. 粒子大小：靠壁面大、靠中轴小，叠加位置噪声
+        const baseSize = 0.04 + (rr / R_MAX) * 0.06;
         const noiseSize = baseSize * (
           1.0 + Math.sin(wx * 7.31 + wz * 3.17) * 0.12
-              + Math.cos(wy * 5.73 + wx * 2.91) * 0.10
-              + Math.sin((wx + wy) * 4.19 + wz * 6.53) * 0.08
+              + Math.cos(wyClamped * 5.73 + wx * 2.91) * 0.10
+              + Math.sin((wx + wyClamped) * 4.19 + wz * 6.53) * 0.08
         );
-        sizes[i] = Math.max(0.015, Math.min(0.18, noiseSize));
+        sizes[i] = Math.max(0.012, Math.min(0.15, noiseSize));
       }
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-      // 存世界坐标到 UV（不会被 group 旋转影响）
       geometry.setAttribute('aWorldPos', new THREE.BufferAttribute(worldPosStore, 3));
 
-      // ===== Shader：外部光源照亮粒子，非自发光 =====
       const material = new THREE.ShaderMaterial({
         uniforms: {
           uPointScale: new THREE.Uniform(1.0),
-          // 光源数据（位置 + 颜色）
-          uLight1Pos: new THREE.Uniform(new THREE.Vector3(0, 5, 10)),
-          uLight1Color: new THREE.Uniform(new THREE.Color('#D4A843')),
-          uLight2Pos: new THREE.Uniform(new THREE.Vector3(-5, -2, 5)),
-          uLight2Color: new THREE.Uniform(new THREE.Color('#B8942E')),
-          uLight3Pos: new THREE.Uniform(new THREE.Vector3(0, 0, 8)),
-          uLight3Color: new THREE.Uniform(new THREE.Color('#FFF8E7')),
-          uCameraPos: new THREE.Uniform(new THREE.Vector3(0, 0, 8)),
+          uLightPos: new THREE.Uniform(new Float32Array([
+            0, 0, 3,  0, -3, 0,  0, 0, 0,
+            0, 0, 0,  0, 0, 0,  0, 0, 0,
+            0, 0, 0,  0, 0, 0,  0, 0, 0,
+            0, 0, 0,  0, 0, 0,  0, 0, 0,
+          ])),
+          uLightColor: new THREE.Uniform(new Float32Array([
+            0.83, 0.66, 0.26,  0.72, 0.58, 0.18,  1.0, 0.97, 0.90,
+            0, 0, 0,  0, 0, 0,  0, 0, 0,
+            0, 0, 0,  0, 0, 0,  0, 0, 0,
+            0, 0, 0,  0, 0, 0,  0, 0, 0,
+          ])),
+          uLightCount: new THREE.Uniform(3),
+          uCameraPos: new THREE.Uniform(new THREE.Vector3(0, -8, 3.5)),
         },
         vertexShader: `
           attribute float aSize;
           attribute vec3 aWorldPos;
           varying vec3 vWorldPos;
-          varying float vSize;
           uniform float uPointScale;
-          uniform vec3 uCameraPos;
           void main() {
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = aSize * uPointScale * (300.0 / -mvPosition.z);
+            gl_PointSize = clamp(aSize * uPointScale * (300.0 / -mvPosition.z), 0.5, 20.0);
             gl_Position = projectionMatrix * mvPosition;
             vWorldPos = aWorldPos;
-            vSize = aSize;
           }
         `,
         fragmentShader: `
           varying vec3 vWorldPos;
-          varying float vSize;
-          uniform vec3 uLight1Pos;
-          uniform vec3 uLight1Color;
-          uniform vec3 uLight2Pos;
-          uniform vec3 uLight2Color;
-          uniform vec3 uLight3Pos;
-          uniform vec3 uLight3Color;
+          uniform float uLightPos[36];
+          uniform float uLightColor[36];
+          uniform int uLightCount;
           uniform vec3 uCameraPos;
 
           void main() {
-            // 圆形粒子蒙版
             float d = length(gl_PointCoord - 0.5) * 2.0;
-            float alpha = 1.0 - smoothstep(0.2, 0.9, d);
+            if (d > 1.0) discard;
+            float alpha = 1.0 - smoothstep(0.15, 0.85, d);
 
-            // === 光照计算：外部光源反光，非自发光 ===
             vec3 totalLight = vec3(0.0);
+            for (int i = 0; i < 12; i++) {
+              if (i >= uLightCount) break;
+              int i3 = i * 3;
+              vec3 lp = vec3(uLightPos[i3], uLightPos[i3+1], uLightPos[i3+2]);
+              vec3 lc = vec3(uLightColor[i3], uLightColor[i3+1], uLightColor[i3+2]);
+              float dist = length(vWorldPos - lp);
+              float att = 1.0 / (1.0 + dist * dist * 0.003);
+              totalLight += lc * att;
+            }
 
-            // 光源1
-            float d1 = length(vWorldPos - uLight1Pos);
-            float att1 = 1.0 / (1.0 + d1 * d1 * 0.005);
-            totalLight += uLight1Color * att1;
-
-            // 光源2
-            float d2 = length(vWorldPos - uLight2Pos);
-            float att2 = 1.0 / (1.0 + d2 * d2 * 0.008);
-            totalLight += uLight2Color * att2;
-
-            // 光源3（摄像机位置的补光）
-            float d3 = length(vWorldPos - uLight3Pos);
-            float att3 = 1.0 / (1.0 + d3 * d3 * 0.003);
-            totalLight += uLight3Color * att3 * 0.5;
-
-            // === 摄像机距离色偏：近暖金，远冷蓝 ===
             float camDist = length(vWorldPos - uCameraPos);
-            float warmth = exp(-camDist * 0.03);
+            float warmth = exp(-camDist * 0.025);
             vec3 nearColor = vec3(1.0, 0.85, 0.6);
             vec3 farColor  = vec3(0.35, 0.45, 0.65);
-            vec3 baseColor = mix(farColor, nearColor, warmth);
+            vec3 baseColor = mix(farColor, nearColor, clamp(warmth, 0.0, 1.0));
 
-            // === 叠加高亮噪声炫光 ===
-            float sparkle = 0.0;
-            sparkle += sin(vWorldPos.x * 23.7 + vWorldPos.y * 17.3) * 0.15;
-            sparkle += cos(vWorldPos.y * 31.1 + vWorldPos.z * 19.7) * 0.12;
-            sparkle += sin(vWorldPos.z * 27.3 + vWorldPos.x * 21.1) * 0.10;
-            sparkle = abs(sparkle);
-            sparkle = pow(sparkle, 3.0) * 0.6; // 少数粒子高亮反光
+            float sparkle = abs(
+              sin(vWorldPos.x * 23.7 + vWorldPos.y * 17.3)
+              + cos(vWorldPos.y * 31.1 + vWorldPos.z * 19.7)
+              + sin(vWorldPos.z * 27.3 + vWorldPos.x * 21.1)
+            );
+            sparkle = pow(sparkle / 3.0, 4.0) * 0.5;
 
             vec3 finalColor = baseColor * totalLight * (1.0 + sparkle);
-            float finalAlpha = alpha * (0.35 + totalLight.r * 0.65);
+            float finalAlpha = alpha * (0.25 + length(totalLight) * 0.7);
 
-            gl_FragColor = vec4(finalColor, finalAlpha);
+            gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 1.0));
           }
         `,
         transparent: true,
@@ -482,10 +372,7 @@
     }
 
     update(delta, cameraPos) {
-      // 极慢的整体旋转（模拟星河流转）
       this._points.rotation.y += delta * 0.001;
-      this._points.rotation.x += delta * 0.0005;
-      // 更新摄像机位置给 shader
       if (cameraPos) {
         this._points.material.uniforms.uCameraPos.value.copy(cameraPos);
       }
@@ -495,601 +382,6 @@
       this._points.geometry.dispose();
       this._points.material.dispose();
       this._scene.remove(this._points);
-    }
-  }
-
-  // ===== PostProcessing — render-to-texture with RGB shift + vignette =====
-  class PostProcessing {
-    constructor(renderer, scene, camera) {
-      this._renderer = renderer;
-      this._scene = scene;
-      this._camera = camera;
-
-      // Fullscreen quad scene for post-processing
-      this._ppScene = new THREE.Scene();
-      this._ppCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
-      // Render targets
-      const size = new THREE.Vector2();
-      renderer.getSize(size);
-      this._rtA = new THREE.WebGLRenderTarget(size.x, size.y, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-      });
-      this._rtB = new THREE.WebGLRenderTarget(size.x, size.y, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-      });
-
-      // RGB Shift + vignette shader
-      const ppShader = {
-        uniforms: {
-          tDiffuse: new THREE.Uniform(null),
-          uRGBStrength: new THREE.Uniform(0.0),
-          uTime: new THREE.Uniform(0.0),
-          uResolution: new THREE.Uniform(new THREE.Vector2(size.x, size.y)),
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform sampler2D tDiffuse;
-          uniform float uRGBStrength;
-          uniform float uTime;
-          uniform vec2 uResolution;
-          varying vec2 vUv;
-
-          void main() {
-            vec2 uv = vUv;
-            float angle = uTime * 0.1;
-            vec2 offset = uRGBStrength * 0.01 * vec2(cos(angle), sin(angle));
-            float r = texture2D(tDiffuse, uv + offset).r;
-            float g = texture2D(tDiffuse, uv).g;
-            float b = texture2D(tDiffuse, uv - offset).b;
-            float a = texture2D(tDiffuse, uv).a;
-
-            // Vignette
-            vec2 vuv = uv - 0.5;
-            float vignette = 1.0 - dot(vuv, vuv) * 0.5;
-
-            gl_FragColor = vec4(r, g, b, a) * vignette;
-          }
-        `,
-      };
-
-      this._ppMaterial = new THREE.ShaderMaterial(ppShader);
-      const quadGeo = new THREE.PlaneGeometry(2, 2);
-      this._ppQuad = new THREE.Mesh(quadGeo, this._ppMaterial);
-      this._ppScene.add(this._ppQuad);
-
-      this._rgbStrength = 0;
-      this._bloomStrength = 0;
-
-      // Resize handler
-      this._onResize = () => {
-        const s = new THREE.Vector2();
-        renderer.getSize(s);
-        this._rtA.setSize(s.x, s.y);
-        this._rtB.setSize(s.x, s.y);
-        this._ppMaterial.uniforms.uResolution.value.set(s.x, s.y);
-      };
-    }
-
-    setRGBStrength(v) { this._rgbStrength = THREE.MathUtils.clamp(v, 0, 1); }
-    setBloomStrength(v) { this._bloomStrength = THREE.MathUtils.clamp(v, 0, 2); }
-
-    render(delta, scrollProgress, mousePos) {
-      if (this._rgbStrength < 0.001) return; // Skip if no effect
-
-      // Render scene to texture
-      this._renderer.setRenderTarget(this._rtA);
-      this._renderer.render(this._scene, this._camera);
-
-      // Apply post-processing
-      this._ppMaterial.uniforms.tDiffuse.value = this._rtA.texture;
-      this._ppMaterial.uniforms.uRGBStrength.value = this._rgbStrength;
-      this._ppMaterial.uniforms.uTime.value += delta;
-
-      this._renderer.setRenderTarget(null);
-      this._renderer.render(this._ppScene, this._ppCamera);
-    }
-
-    dispose() {
-      this._rtA.dispose();
-      this._rtB.dispose();
-      this._ppMaterial.dispose();
-      this._ppQuad.geometry.dispose();
-    }
-  }
-
-  // ===== SynapseNetwork =====
-  class SynapseNetwork {
-    constructor(scene) {
-      this._scene = scene;
-      this._nodes = new Map();
-      this._edges = [];
-      this._group = new THREE.Group();
-      this._group.name = 'synapseNetwork';
-      scene.add(this._group);
-    }
-
-    addNode(id, position, options = {}) {
-      const { radius = 0.3, isCore = false } = options;
-      const colorHex = isCore ? '#D4A843' : '#B8942E';
-
-      const geo = new THREE.SphereGeometry(radius, 32, 32);
-      const mat = new THREE.MeshStandardMaterial({
-        color: colorHex,
-        roughness: 0.2,
-        metalness: 0.9,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(position);
-      mesh.name = `node_${id}`;
-
-      // Soft glow sprite — radial gradient, not fresnel ring
-      if (!SynapseNetwork._glowTex) {
-        const gSize = 128;
-        const gCanvas = document.createElement('canvas');
-        gCanvas.width = gSize; gCanvas.height = gSize;
-        const gCtx = gCanvas.getContext('2d');
-        const grad = gCtx.createRadialGradient(gSize/2, gSize/2, 0, gSize/2, gSize/2, gSize/2);
-        grad.addColorStop(0, 'rgba(255,240,210,1)');
-        grad.addColorStop(0.15, 'rgba(255,220,150,0.8)');
-        grad.addColorStop(0.4, 'rgba(200,150,50,0.3)');
-        grad.addColorStop(0.7, 'rgba(100,60,10,0.05)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        gCtx.fillStyle = grad;
-        gCtx.fillRect(0, 0, gSize, gSize);
-        SynapseNetwork._glowTex = new THREE.CanvasTexture(gCanvas);
-        SynapseNetwork._glowTex.needsUpdate = true;
-      }
-
-      const glowSpriteMat = new THREE.SpriteMaterial({
-        map: SynapseNetwork._glowTex,
-        color: new THREE.Color(colorHex),
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const glowSprite = new THREE.Sprite(glowSpriteMat);
-      const glowScale = radius * 8;
-      glowSprite.scale.set(glowScale, glowScale, 1);
-      glowSprite.name = `glow_${id}`;
-      mesh.add(glowSprite);
-
-      this._group.add(mesh);
-      this._nodes.set(id, {
-        id, position: position.clone(), mesh, glow: glowSprite,
-        isCore, radius, _breathPhase: Math.random() * Math.PI * 2
-      });
-      return id;
-    }
-
-    connect(fromId, toId, options = {}) {
-      const from = this._nodes.get(fromId);
-      const to = this._nodes.get(toId);
-      if (!from || !to) return;
-
-      const { tubeRadius = 0.02, flowSpeed = 1.0 } = options;
-
-      // Bezier curve with mid-point elevation
-      const mid = new THREE.Vector3().addVectors(from.position, to.position).multiplyScalar(0.5);
-      mid.y += from.position.distanceTo(to.position) * 0.3;
-      const curve = new THREE.QuadraticBezierCurve3(from.position.clone(), mid, to.position.clone());
-
-      // Tube pipeline — glowing gold
-      const tubeGeo = new THREE.TubeGeometry(curve, 48, tubeRadius * 1.5, 8, false);
-      const tubeMat = new THREE.MeshBasicMaterial({
-        color: '#D4A843', transparent: true, opacity: 0.35, depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const tube = new THREE.Mesh(tubeGeo, tubeMat);
-      tube.name = `tube_${fromId}_${toId}`;
-      this._group.add(tube);
-
-      // Outer glow tube (thicker, more transparent)
-      const glowTubeGeo = new THREE.TubeGeometry(curve, 48, tubeRadius * 4, 8, false);
-      const glowTubeMat = new THREE.MeshBasicMaterial({
-        color: '#D4A843', transparent: true, opacity: 0.08, depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const glowTube = new THREE.Mesh(glowTubeGeo, glowTubeMat);
-      glowTube.name = `glowtube_${fromId}_${toId}`;
-      this._group.add(glowTube);
-
-      // Flow particles along the curve — gold colored
-      const flowCount = 100;
-      const flowPositions = new Float32Array(flowCount * 3);
-      const flowColors = new Float32Array(flowCount * 3);
-      const flowSizes = new Float32Array(flowCount);
-
-      for (let i = 0; i < flowCount; i++) {
-        const t = i / flowCount;
-        const pt = curve.getPointAt(t);
-        flowPositions[i * 3] = pt.x;
-        flowPositions[i * 3 + 1] = pt.y;
-        flowPositions[i * 3 + 2] = pt.z;
-        // Gold flow particles
-        flowColors[i * 3] = 0.83;
-        flowColors[i * 3 + 1] = 0.66;
-        flowColors[i * 3 + 2] = 0.26;
-        flowSizes[i] = 0.03;
-      }
-
-      const flowGeo = new THREE.BufferGeometry();
-      flowGeo.setAttribute('position', new THREE.BufferAttribute(flowPositions, 3));
-      flowGeo.setAttribute('aColor', new THREE.BufferAttribute(flowColors, 3));
-      flowGeo.setAttribute('aSize', new THREE.BufferAttribute(flowSizes, 1));
-
-      const flowMat = new THREE.ShaderMaterial({
-        uniforms: { uPointScale: new THREE.Uniform(1.5) },
-        vertexShader: ShaderLib.particleVS_color,
-        fragmentShader: ShaderLib.particleFS,
-        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      });
-
-      const flowParticles = new THREE.Points(flowGeo, flowMat);
-      flowParticles.name = `flow_${fromId}_${toId}`;
-      this._group.add(flowParticles);
-
-      this._edges.push({
-        from: fromId, to: toId, tube, glowTube, particles: flowParticles, curve,
-        flowSpeed, _pulsePhase: Math.random() * Math.PI * 2,
-      });
-    }
-
-    setNodeActive(id, active) {
-      const node = this._nodes.get(id);
-      if (!node) return;
-      const color = new THREE.Color(active ? '#D4A843' : '#B8942E');
-      node.glow.material.color.set(color);
-      node.mesh.material.color.set(color);
-    }
-
-    getNodeWorldPosition(id) {
-      const node = this._nodes.get(id);
-      if (!node) return null;
-      const pos = new THREE.Vector3();
-      node.mesh.getWorldPosition(pos);
-      return pos;
-    }
-
-    update(delta, mousePos = null) {
-      const t = performance.now() * 0.001;
-
-      // Node breathing
-      this._nodes.forEach((node) => {
-        const breath = 1 + Math.sin(t * 2.0 + node._breathPhase) * 0.04;
-        node.mesh.scale.setScalar(breath);
-      });
-
-      // Flow particles along curves
-      this._edges.forEach((edge) => {
-        const positions = edge.particles.geometry.attributes.position.array;
-        for (let i = 0; i < positions.length / 3; i++) {
-          let tVal = (i / (positions.length / 3) + t * edge.flowSpeed * 0.1) % 1;
-          const pt = edge.curve.getPointAt(tVal);
-          positions[i * 3] = pt.x;
-          positions[i * 3 + 1] = pt.y;
-          positions[i * 3 + 2] = pt.z;
-        }
-        edge.particles.geometry.attributes.position.needsUpdate = true;
-      });
-    }
-
-    clear() {
-      while (this._group.children.length > 0) {
-        const child = this._group.children[0];
-        if (child.geometry) child.geometry.dispose();
-        if (child.material) {
-          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
-          else child.material.dispose();
-        }
-        this._group.remove(child);
-      }
-      this._nodes.clear();
-      this._edges = [];
-    }
-
-    dispose() {
-      this.clear();
-      this._scene.remove(this._group);
-    }
-  }
-
-  // ===== Scene1_Hero — Hero landing with VINCENT text =====
-  class Scene1_Hero {
-    constructor(stage) {
-      this._stage = stage;
-      this._group = new THREE.Group();
-      this._group.name = 'scene1_hero';
-    }
-
-    init() {
-      // VINCENT text via Canvas Texture
-      const canvas = document.createElement('canvas');
-      canvas.width = 1024; canvas.height = 256;
-      const ctx = canvas.getContext('2d');
-      const gradient = ctx.createLinearGradient(0, 0, 1024, 0);
-      gradient.addColorStop(0, '#D4A843'); gradient.addColorStop(0.5, '#B8942E'); gradient.addColorStop(1, '#8B6914');
-      ctx.fillStyle = gradient;
-      ctx.font = 'bold 100px Inter, PingFang SC, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('VINCENT', 512, 128);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.minFilter = THREE.LinearFilter;
-
-      const textGeo = new THREE.PlaneGeometry(8, 2);
-      const textMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-      const textMesh = new THREE.Mesh(textGeo, textMat);
-      textMesh.position.set(0, 0, 0);
-      textMesh.name = 'heroText';
-      this._group.add(textMesh);
-
-      // Subtitle
-      const subCanvas = document.createElement('canvas');
-      subCanvas.width = 1024; subCanvas.height = 64;
-      const subCtx = subCanvas.getContext('2d');
-      subCtx.fillStyle = '#B8942E';
-      subCtx.font = '18px Inter, PingFang SC, sans-serif';
-      subCtx.textAlign = 'center';
-      subCtx.fillText('大数据管理与应用 · 创造数据与代码的静谧建筑', 512, 32);
-      const subTexture = new THREE.CanvasTexture(subCanvas);
-      subTexture.minFilter = THREE.LinearFilter;
-      const subGeo = new THREE.PlaneGeometry(6, 0.4);
-      const subMat = new THREE.MeshBasicMaterial({ map: subTexture, transparent: true, depthWrite: false });
-      const subMesh = new THREE.Mesh(subGeo, subMat);
-      subMesh.position.set(0, -1.5, 0);
-      subMesh.name = 'heroSubtitle';
-      this._group.add(subMesh);
-
-      this._stage.scene.add(this._group);
-    }
-
-    update(delta, progress) {
-      // Fade out on scroll
-      const opacity = 1 - progress;
-      this._group.children.forEach(c => { c.material.opacity = Math.max(0, opacity); });
-    }
-
-    onEnter() { this._group.visible = true; }
-    onLeave() { this._group.visible = false; }
-    dispose() {
-      this._group.children.forEach(c => {
-        if (c.material.map) c.material.map.dispose();
-        c.material.dispose(); c.geometry.dispose();
-      });
-      this._stage.scene.remove(this._group);
-    }
-  }
-
-  // ===== Scene2_NeuralGallery — 项目卡片（无节点球/轨道管） =====
-  class Scene2_NeuralGallery {
-    constructor(stage) {
-      this._stage = stage;
-      this._group = new THREE.Group();
-      this._group.name = 'scene2_gallery';
-      stage.scene.add(this._group);
-      this._cards = [];
-    }
-
-    init(projects) {
-      const cols = [-3.5, 3.5];
-      const rows = [5, 0, -5];
-
-      projects.forEach((proj, i) => {
-        const col = cols[i % 2];
-        const row = rows[Math.floor(i / 2)];
-        const x = col + (Math.random() - 0.5) * 1.0;
-        const yPos = row + (Math.random() - 0.5) * 1.0;
-        const z = (Math.random() - 0.5) * 2;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 200;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.beginPath(); ctx.roundRect(0, 0, 512, 200, 12); ctx.fill();
-        ctx.strokeStyle = '#D4A843'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.roundRect(0, 0, 512, 200, 12); ctx.stroke();
-        ctx.fillStyle = '#D4A843'; ctx.font = 'bold 24px Inter, PingFang SC, sans-serif';
-        ctx.fillText(proj.name, 20, 45);
-        ctx.fillStyle = '#AAAAAA'; ctx.font = '14px Inter, PingFang SC, sans-serif';
-        let line = ''; let ly = 80;
-        for (const char of proj.tagline) {
-          if (ctx.measureText(line + char).width > 460 && line.length > 0) {
-            ctx.fillText(line, 20, ly); ly += 22; line = char;
-          } else { line += char; }
-        }
-        if (line) ctx.fillText(line, 20, ly);
-        ctx.fillStyle = '#B8942E'; ctx.font = '12px monospace';
-        ctx.fillText(proj.tech.join(' · '), 20, 175);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        const cardGeo = new THREE.PlaneGeometry(3, 1.17);
-        const cardMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-        const card = new THREE.Mesh(cardGeo, cardMat);
-        card.position.set(x, yPos, z);
-        card.lookAt(new THREE.Vector3(x, yPos, 10));
-        card.name = `card_${proj.id}`;
-        this._group.add(card);
-        this._cards.push({ id: proj.id, card, pos: new THREE.Vector3(x, yPos, z) });
-      });
-    }
-
-    update(delta, progress, mousePos) {
-      const activeIdx = Math.min(Math.floor(progress * this._cards.length), this._cards.length - 1);
-      this._cards.forEach((c, i) => {
-        c.card.material.opacity = (i === activeIdx) ? 1.0 : 0.5;
-      });
-    }
-
-    onEnter() { this._group.visible = true; }
-    onLeave() { this._group.visible = false; }
-    dispose() {
-      this._group.children.forEach(c => {
-        if (c.material.map) c.material.map.dispose();
-        c.material.dispose(); c.geometry.dispose();
-      });
-      this._stage.scene.remove(this._group);
-    }
-  }
-
-  // ===== Scene3_SkillConstellation — 技能标签（无节点球/轨道管） =====
-  class Scene3_SkillConstellation {
-    constructor(stage) {
-      this._stage = stage;
-      this._group = new THREE.Group();
-      this._group.name = 'scene3_constellation';
-      this._rotationSpeed = 0.05;
-      stage.scene.add(this._group);
-    }
-
-    init(skills) {
-      // Inner ring — core skills
-      const innerRadius = 3;
-      skills.core.forEach((skill, i) => {
-        const angle = (Math.PI * 2 / skills.core.length) * i;
-        const yOff = (i < 2) ? 2 : -2;
-        const pos = new THREE.Vector3(
-          Math.cos(angle) * innerRadius,
-          yOff,
-          Math.sin(angle) * innerRadius
-        );
-        this._group.add(this._createLabel(skill.name, pos, false));
-      });
-
-      // Outer ring — auxiliary skills
-      const outerRadius = 6;
-      skills.auxiliary.forEach((skill, i) => {
-        const angle = (Math.PI * 2 / skills.auxiliary.length) * i + 0.2;
-        const yOff = (i < 4) ? 3.5 : -3.5;
-        const pos = new THREE.Vector3(
-          Math.cos(angle) * outerRadius,
-          yOff,
-          Math.sin(angle) * outerRadius
-        );
-        this._group.add(this._createLabel(skill.name, pos, true));
-      });
-    }
-
-    _createLabel(text, position, isSmall) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 256; canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = isSmall ? '#B8942E' : '#D4A843';
-      ctx.font = `${isSmall ? 16 : 20}px Inter, PingFang SC, sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(text, 128, 32);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.minFilter = THREE.LinearFilter;
-      const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.position.copy(position);
-      sprite.scale.set(isSmall ? 2 : 3, isSmall ? 0.5 : 0.75, 1);
-      return sprite;
-    }
-
-    update(delta, progress, mousePos) {
-      this._group.rotation.y += this._rotationSpeed * delta;
-    }
-
-    onEnter() { this._group.visible = true; }
-    onLeave() { this._group.visible = false; }
-    dispose() {
-      this._group.children.forEach(c => {
-        if (c.material.map) c.material.map.dispose();
-        c.material.dispose();
-      });
-      this._stage.scene.remove(this._group);
-    }
-  }
-
-  // ===== Scene4_About — Quote, name, and contact info =====
-  class Scene4_About {
-    constructor(stage) {
-      this._stage = stage;
-      this._group = new THREE.Group();
-      this._group.name = 'scene4_about';
-      stage.scene.add(this._group);
-    }
-
-    init(personalData) {
-      // Quote
-      const canvas = document.createElement('canvas');
-      canvas.width = 1024; canvas.height = 128;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#D4A843';
-      ctx.font = 'bold 32px Inter, PingFang SC, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(personalData.quote, 512, 64);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.minFilter = THREE.LinearFilter;
-      const quoteGeo = new THREE.PlaneGeometry(8, 1);
-      const quoteMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-      const quoteMesh = new THREE.Mesh(quoteGeo, quoteMat);
-      quoteMesh.position.set(0, 0.5, 0);
-      this._group.add(quoteMesh);
-
-      // Name
-      const nameCanvas = document.createElement('canvas');
-      nameCanvas.width = 512; nameCanvas.height = 96;
-      const nCtx = nameCanvas.getContext('2d');
-      nCtx.fillStyle = '#FFFFFF';
-      nCtx.font = 'bold 42px Inter, PingFang SC, sans-serif';
-      nCtx.textAlign = 'center'; nCtx.textBaseline = 'middle';
-      nCtx.fillText(`${personalData.nameCn} · ${personalData.nameEn}`, 256, 48);
-      const nameTex = new THREE.CanvasTexture(nameCanvas);
-      nameTex.minFilter = THREE.LinearFilter;
-      const nameGeo = new THREE.PlaneGeometry(5, 1);
-      const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthWrite: false });
-      const nameMesh = new THREE.Mesh(nameGeo, nameMat);
-      nameMesh.position.set(0, 2, 0);
-      this._group.add(nameMesh);
-
-      // Contacts
-      const contacts = [
-        `QQ: ${personalData.email[0]}`,
-        `Gmail: ${personalData.email[1]}`,
-        `GitHub: ${personalData.github}`
-      ];
-      contacts.forEach((text, i) => {
-        const label = this._createTextSprite(text, new THREE.Vector3(0, -1 - i * 0.8, 0));
-        this._group.add(label);
-      });
-    }
-
-    _createTextSprite(text, position) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 512; canvas.height = 48;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#B8942E';
-      ctx.font = '16px monospace';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(text, 256, 24);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.minFilter = THREE.LinearFilter;
-      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
-      const sprite = new THREE.Sprite(mat);
-      sprite.position.copy(position);
-      sprite.scale.set(4, 0.38, 1);
-      return sprite;
-    }
-
-    update(delta, progress) {}
-    onEnter() { this._group.visible = true; }
-    onLeave() { this._group.visible = false; }
-    dispose() {
-      this._group.children.forEach(c => {
-        if (c.material.map) c.material.map.dispose();
-        c.material.dispose(); c.geometry && c.geometry.dispose();
-      });
-      this._stage.scene.remove(this._group);
     }
   }
 
@@ -1113,8 +405,6 @@
       `;
     }
 
-    start() {} // Resources load, then caller calls complete()
-
     complete() {
       this._el.style.opacity = '0';
       setTimeout(() => {
@@ -1137,13 +427,8 @@
     setState(state) {
       this._state = state;
       this._el.className = `cursor cursor--${state}`;
-      if (state === 'hover') {
-        this._el.style.width = '40px';
-        this._el.style.height = '40px';
-      } else {
-        this._el.style.width = '20px';
-        this._el.style.height = '20px';
-      }
+      this._el.style.width = (state === 'hover') ? '40px' : '20px';
+      this._el.style.height = (state === 'hover') ? '40px' : '20px';
     }
 
     update(mouseManager) {
@@ -1156,129 +441,230 @@
     dispose() {}
   }
 
-  // ===== App Bootstrap =====
+  // ===== Bootstrap =====
   window.addEventListener('DOMContentLoaded', () => {
     const stage = new Stage('stage-container');
-    const mouse = new MouseManager(stage.renderer.domElement);
+    const mouse = new MouseManager();
     const cursorUI = new CursorUI();
-    const starfield = new StarfieldBackground(stage.scene, 200000);
-    const post = new PostProcessing(stage.renderer, stage.scene, stage.camera);
+    const starfield = new StarfieldBackground(stage.scene, 120000);
 
-    // Camera keyframes — vertical flight path
-    const camCtrl = new CameraController(stage.camera);
-    camCtrl.addKeyframe(0.0,   new THREE.Vector3(0, 0, 8),   new THREE.Vector3(0, 0, 0), 50);
-    camCtrl.addKeyframe(0.12,  new THREE.Vector3(0, 1, 8),   new THREE.Vector3(0, 0, 0), 48);
-    camCtrl.addKeyframe(0.25,  new THREE.Vector3(0, 3, 7),   new THREE.Vector3(0, 2, 0), 45);
-    camCtrl.addKeyframe(0.38,  new THREE.Vector3(0, 5, 7),   new THREE.Vector3(0, 4, 0), 43);
-    camCtrl.addKeyframe(0.50,  new THREE.Vector3(0, 7, 6),   new THREE.Vector3(0, 6, 0), 42);
-    camCtrl.addKeyframe(0.62,  new THREE.Vector3(0, 4, 7),   new THREE.Vector3(0, 3, 0), 44);
-    camCtrl.addKeyframe(0.75,  new THREE.Vector3(0, 0, 10),  new THREE.Vector3(0, 0, 0), 50);
-    camCtrl.addKeyframe(1.0,   new THREE.Vector3(0, 0, 8),   new THREE.Vector3(0, 0, 0), 50);
+    // ===== 调试坐标轴：原点=圆柱底面中心(0,-10,0)，六向各24单位，白线+刻度+数字 =====
+    function createDebugAxes(origin, halfLen, thickness) {
+      const group = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false });
+      const segs = 8;
+      const tickInterval = 4;       // 每 4 单位标数字
+      const tickLen = 0.5;
+      const tickThick = thickness * 0.5;
 
-    // Initialize scenes
-    const scenes = [
-      new Scene1_Hero(stage),
-      new Scene2_NeuralGallery(stage),
-      new Scene3_SkillConstellation(stage),
-      new Scene4_About(stage),
-    ];
-    scenes[0].init();
-    scenes[1].init(DataModel.projects);
-    scenes[2].init(DataModel.skills);
-    scenes[3].init(DataModel.personal);
-
-    // Hide scenes 2-4 initially
-    for (let i = 1; i < scenes.length; i++) scenes[i]._group.visible = false;
-
-    // ===== Debug Scaffold =====
-    const DEBUG = {
-      _steps: [],
-      _errors: [],
-      log(step, detail) {
-        const entry = { step, detail, time: performance.now().toFixed(1) };
-        this._steps.push(entry);
-        console.log(`[${entry.time}ms] ${step}`, detail || '');
-      },
-      err(step, e) {
-        const entry = { step, error: e.message || e, stack: e.stack, time: performance.now().toFixed(1) };
-        this._errors.push(entry);
-        console.error(`[${entry.time}ms] ERROR @ ${step}:`, e);
-      },
-      dump() { console.table(this._steps); if (this._errors.length) console.table(this._errors); }
-    };
-    window.__DEBUG = DEBUG;
-
-    DEBUG.log('bootstrap', '开始组装');
-
-    // ===== GSAP ScrollTrigger =====
-    document.body.style.height = '400vh';
-    gsap.registerPlugin(ScrollTrigger);
-    DEBUG.log('scrolltrigger', 'GSAP+ScrollTrigger 已注册');
-
-    const scrollProxy = { progress: 0 };
-    let prevSceneIdx = 0;
-    let _frameCount = 0;
-
-    try {
-      gsap.to(scrollProxy, {
-        progress: 1, ease: 'none',
-        scrollTrigger: {
-          trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.5,
-        }
+      // 主轴（双向：正向 + 负向，各 halfLen）
+      const dirs = [
+        { dx: 1, dy: 0, dz: 0, rotAxis: 'z', rotAngle: -Math.PI/2 },  // ±X
+        { dx: 0, dy: 1, dz: 0, rotAxis: 'none', rotAngle: 0 },         // ±Y
+        { dx: 0, dy: 0, dz: 1, rotAxis: 'x', rotAngle: Math.PI/2 },    // ±Z
+      ];
+      dirs.forEach(d => {
+        [1, -1].forEach(sign => {
+          const cyl = new THREE.Mesh(new THREE.CylinderGeometry(thickness, thickness, halfLen, segs), mat);
+          if (d.rotAxis === 'z') cyl.rotation.z = d.rotAngle;
+          if (d.rotAxis === 'x') cyl.rotation.x = d.rotAngle;
+          cyl.position.set(d.dx * sign * halfLen/2, d.dy * sign * halfLen/2, d.dz * sign * halfLen/2);
+          group.add(cyl);
+        });
       });
-      DEBUG.log('tween', 'GSAP tween + ScrollTrigger 已创建');
-    } catch (e) { DEBUG.err('创建ScrollTrigger', e); }
 
-    // ===== 持续 rAF 渲染循环 =====
-    let _rafId;
-    function _persistentLoop(ts) {
-      _rafId = requestAnimationFrame(_persistentLoop);
-      try {
-        const delta = Math.min(stage.clock.getDelta(), 0.1);
-        mouse.update();
+      // 刻度 + 数字标签
+      for (let val = -halfLen; val <= halfLen; val += tickInterval) {
+        if (val === 0) continue;
+        // X 轴刻度
+        const tx = new THREE.Mesh(new THREE.CylinderGeometry(tickThick, tickThick, tickLen, 6), mat);
+        tx.position.set(val, 0, 0);
+        group.add(tx);
+        group.add(makeLabel(String(val), val, 0, 0));
+        // Y 轴刻度
+        const ty = new THREE.Mesh(new THREE.CylinderGeometry(tickThick, tickThick, tickLen, 6), mat);
+        ty.rotation.z = Math.PI / 2;
+        ty.position.set(0, val, 0);
+        group.add(ty);
+        group.add(makeLabel(String(val), 0, val, 0));
+        // Z 轴刻度
+        const tz = new THREE.Mesh(new THREE.CylinderGeometry(tickThick, tickThick, tickLen, 6), mat);
+        tz.rotation.z = Math.PI / 2;
+        tz.position.set(0, 0, val);
+        group.add(tz);
+        group.add(makeLabel(String(val), 0, 0, val));
+      }
 
-        // 直接用 DOM 滚动位置算进度，不依赖 ScrollTrigger 内部状态
-        const maxScroll = document.body.scrollHeight - window.innerHeight;
-        const p = maxScroll > 0 ? Math.min(window.scrollY / maxScroll, 1) : 0;
-        camCtrl.update(p);
-        starfield.update(delta, camCtrl.getPosition());
+      // 原点大球
+      group.add(new THREE.Mesh(new THREE.SphereGeometry(thickness * 4, 16, 16), mat));
+      // 六向端点小球
+      [
+        [halfLen,0,0],[-halfLen,0,0],[0,halfLen,0],[0,-halfLen,0],[0,0,halfLen],[0,0,-halfLen]
+      ].forEach(([dx,dy,dz]) => {
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(thickness * 2.5, 8, 8), mat);
+        tip.position.set(dx, dy, dz);
+        group.add(tip);
+      });
 
-        const sceneIdx = Math.min(Math.floor(p * 4), 3);
-        const localP = Math.min((p - sceneIdx * 0.25) / 0.25, 1);
+      group.position.copy(origin);
+      return group;
 
-        scenes.forEach((s, i) => { s._group.visible = (i === sceneIdx); });
-        if (sceneIdx !== prevSceneIdx) {
-          DEBUG.log('scene', `${prevSceneIdx} → ${sceneIdx} @ ${(p*100).toFixed(1)}%`);
-          prevSceneIdx = sceneIdx;
-        }
-        scenes[sceneIdx].update(delta, localP, mouse.normalized);
-        cursorUI.update(mouse);
-        stage.renderer.render(stage.scene, stage.camera);
-
-        _frameCount++;
-        if (_frameCount === 1) DEBUG.log('F1', `场景${sceneIdx} 进度${p.toFixed(3)} 相机z${camCtrl.getPosition().z.toFixed(1)} Δ${delta.toFixed(4)}`);
-      } catch (e) {
-        DEBUG.err('渲染循环', e);
-        if (_frameCount > 60) { cancelAnimationFrame(_rafId); DEBUG.err('渲染停止', '连续错误>60帧'); }
+      function makeLabel(text, x, y, z) {
+        const c = document.createElement('canvas');
+        c.width = 128; c.height = 64;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 64, 32);
+        const tex = new THREE.CanvasTexture(c);
+        tex.minFilter = THREE.LinearFilter;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false }));
+        sprite.position.set(x, y, z);
+        sprite.scale.set(1.2, 0.6, 1);
+        return sprite;
       }
     }
-    _persistentLoop(0);
-    DEBUG.log('rAF', '渲染循环启动');
+    const debugAxes = createDebugAxes(new THREE.Vector3(0, -10, 0), 24, 0.06);
+    stage.scene.add(debugAxes);
 
-    // ===== Preloader =====
-    try {
-      const preloader = new Preloader(() => { DEBUG.log('preloader', '回调触发'); });
-      preloader.start();
-      DEBUG.log('preloader', '开场动画已启动');
-      setTimeout(() => {
-        try { preloader.complete(); DEBUG.log('preloader', '动画结束，遮罩已移除'); }
-        catch (e) { DEBUG.err('preloader完成', e); }
-      }, 1500);
-    } catch (e) { DEBUG.err('创建Preloader', e); }
+    // ===== FreeCam 自由摄像机 =====
+    class FreeCam {
+      constructor(camera) {
+        this._cam = camera;
+        this._isActive = false;
+        this._yaw = 0;
+        this._pitch = 0;
+        this._moveSpeed = 8;
+        this._rotSpeed = 2.5;
+        this._keys = {};
+        this._savedScrollY = 0;
+        this._scrollDelta = 0;
 
-    window.__stage = stage;
-    window.__scenes = scenes;
-    DEBUG.log('ready', 'Neural Constellation 初始化完成 — 滚动以探索');
+        const onDown = (e) => { this._keys[e.key.toLowerCase()] = true; };
+        const onUp   = (e) => { this._keys[e.key.toLowerCase()] = false; };
+        const onWheel = (e) => { this._scrollDelta += e.deltaY; };
+        window.addEventListener('keydown', onDown);
+        window.addEventListener('keyup', onUp);
+        window.addEventListener('wheel', onWheel, { passive: true });
+        this._disposeKeys = () => {
+          window.removeEventListener('keydown', onDown);
+          window.removeEventListener('keyup', onUp);
+          window.removeEventListener('wheel', onWheel);
+        };
+      }
+
+      get isActive() { return this._isActive; }
+
+      enable() {
+        this._isActive = true;
+        this._savedScrollY = window.scrollY;
+        // 从当前摄像机朝向反算 yaw/pitch
+        const dir = new THREE.Vector3();
+        this._cam.getWorldDirection(dir);
+        this._yaw = Math.atan2(dir.x, dir.z);
+        this._pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -0.99, 0.99));
+      }
+
+      disable() { this._isActive = false; }
+
+      update(dt) {
+        if (!this._isActive) return;
+        const delta = Math.min(dt, 0.1);
+
+        // 旋转
+        if (this._keys['q']) this._yaw -= this._rotSpeed * delta;
+        if (this._keys['e']) this._yaw += this._rotSpeed * delta;
+        if (this._keys['r']) this._pitch += this._rotSpeed * delta;
+        if (this._keys['t']) this._pitch -= this._rotSpeed * delta;
+        this._pitch = THREE.MathUtils.clamp(this._pitch, -1.4, 1.4); // ±80°
+
+        // 方向向量
+        const forward = new THREE.Vector3(
+          Math.sin(this._yaw) * Math.cos(this._pitch),
+          Math.sin(this._pitch),
+          Math.cos(this._yaw) * Math.cos(this._pitch)
+        );
+        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+        const speed = this._moveSpeed * delta;
+
+        // 移动
+        const pos = this._cam.position;
+        if (this._keys['w']) pos.addScaledVector(forward, speed);
+        if (this._keys['s']) pos.addScaledVector(forward, -speed);
+        if (this._keys['a']) pos.addScaledVector(right, -speed);
+        if (this._keys['d']) pos.addScaledVector(right, speed);
+        if (this._keys[' ']) pos.y += speed;
+        if (this._keys['shift']) pos.y -= speed;
+
+        // 滚轮前进/后退
+        if (Math.abs(this._scrollDelta) > 0.5) {
+          const scrollSpeed = speed * 0.15 * this._scrollDelta;
+          pos.addScaledVector(forward, -scrollSpeed);
+          this._scrollDelta *= 0.6; // 惯性衰减
+          if (Math.abs(this._scrollDelta) < 0.5) this._scrollDelta = 0;
+        }
+
+        // 应用
+        this._cam.lookAt(pos.clone().add(forward));
+      }
+
+      dispose() { this._disposeKeys(); }
+    }
+    const freeCam = new FreeCam(stage.camera);
+
+    // ===== 模式切换按钮 =====
+    const camToggleBtn = document.getElementById('cam-toggle');
+    camToggleBtn.addEventListener('click', () => {
+      camToggleBtn.blur(); // 防止 Space 键二次触发
+      if (freeCam.isActive) {
+        freeCam.disable();
+        camToggleBtn.textContent = 'SCROLL';
+        camToggleBtn.classList.remove('active');
+        document.getElementById('fly-hint').classList.remove('visible');
+        document.body.style.overflowY = 'auto';
+        window.scrollTo(0, freeCam._savedScrollY);
+      } else {
+        freeCam.enable();
+        camToggleBtn.textContent = 'FREECAM';
+        camToggleBtn.classList.add('active');
+        document.getElementById('fly-hint').classList.add('visible');
+        document.body.style.overflowY = 'hidden';
+      }
+    });
+
+    // 页面总高度
+    document.body.style.height = '400vh';
+    gsap.registerPlugin(ScrollTrigger);
+
+    // rAF 渲染循环
+    function loop() {
+      requestAnimationFrame(loop);
+      const delta = Math.min(stage.clock.getDelta(), 0.1);
+      mouse.update();
+
+      if (freeCam.isActive) {
+        freeCam.update(delta);
+      } else {
+        const maxScroll = document.body.scrollHeight - window.innerHeight;
+        const p = maxScroll > 0 ? Math.min(window.scrollY / maxScroll, 1) : 0;
+        const camY = CYLINDER.Y_MIN + p * CYLINDER.H_TOTAL;
+        stage.camera.position.set(0, camY, 3.5);
+        stage.camera.lookAt(0, camY, 0);
+      }
+
+      starfield.update(delta, stage.camera.position);
+      cursorUI.update(mouse);
+      stage.renderer.render(stage.scene, stage.camera);
+    }
+    loop();
+
+    // Preloader
+    const preloader = new Preloader(() => {});
+    setTimeout(() => preloader.complete(), 1500);
+
+    console.log('Neural Constellation · 圆柱基底就绪 · 滚动探索');
   });
   </script>
 </body>
