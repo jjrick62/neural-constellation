@@ -227,61 +227,55 @@
   class StarfieldBackground {
     constructor(scene, count = 120000) {
       this._scene = scene;
-      this._count = count;
-
-      // 四分区权重（Z0:20% Z1:28% Z2:36% Z3:16%）
-      const zones = [
-        { yMin: -10, yMax: -4, weight: 0.20 },
-        { yMin:  -4, yMax:  2, weight: 0.28 },
-        { yMin:   2, yMax:  8, weight: 0.36 },
-        { yMin:   8, yMax: 14, weight: 0.16 },
+      // 四分区独立密度（Z0 稀疏 / Z1 中等 / Z2 最密 / Z3 适中）
+      const zoneDefs = [
+        { yMin: -10, yMax: -4, count: 10000 },
+        { yMin:  -4, yMax:  2, count: 34000 },
+        { yMin:   2, yMax:  8, count: 43000 },
+        { yMin:   8, yMax: 14, count: 33000 },
       ];
+      const totalCount = zoneDefs.reduce((s, z) => s + z.count, 0);
+      this._count = totalCount;
 
-      const positions = new Float32Array(count * 3);
-      const sizes = new Float32Array(count);
-      const worldPosStore = new Float32Array(count * 3);
+      const positions = new Float32Array(totalCount * 3);
+      const sizes = new Float32Array(totalCount);
+      const worldPosStore = new Float32Array(totalCount * 3);
 
       const R_MAX = CYLINDER.R_INNER;
       const R_MIN = 0.3;
 
-      for (let i = 0; i < count; i++) {
-        // 1. 按权重选分区
-        const zr = Math.random();
-        let zone = zones[0];
-        let zacc = 0;
-        for (const z of zones) { zacc += z.weight; if (zr <= zacc) { zone = z; break; } }
-
-        // 2. 柱坐标生成 Y：区内均匀 + 边界高斯羽化
+      let idx = 0;
+      for (const zone of zoneDefs) {
         const ySpan = zone.yMax - zone.yMin;
-        const yMid = (zone.yMin + zone.yMax) / 2;
-        const wy = yMid + (Math.random() - 0.5) * ySpan * 1.1;
-        const wyClamped = THREE.MathUtils.clamp(wy, CYLINDER.Y_MIN, CYLINDER.Y_MAX);
+        for (let j = 0; j < zone.count; j++) {
+          // Y：区内均匀
+          const wy = zone.yMin + Math.random() * ySpan;
 
-        // 3. 柱坐标生成 θ：均匀分布
-        const theta = Math.random() * Math.PI * 2;
+          // θ：均匀
+          const theta = Math.random() * Math.PI * 2;
 
-        // 4. 柱坐标生成 r：偏向壁面（r² 分布，外密内疏）
-        const rr = R_MIN + (R_MAX - R_MIN) * Math.sqrt(Math.random());
+          // r：偏壁面
+          const rr = R_MIN + (R_MAX - R_MIN) * Math.sqrt(Math.random());
 
-        // 5. 柱坐标 → 笛卡尔
-        const wx = rr * Math.cos(theta);
-        const wz = rr * Math.sin(theta);
+          const wx = rr * Math.cos(theta);
+          const wz = rr * Math.sin(theta);
 
-        positions[i * 3] = wx;
-        positions[i * 3 + 1] = wyClamped;
-        positions[i * 3 + 2] = wz;
-        worldPosStore[i * 3] = wx;
-        worldPosStore[i * 3 + 1] = wyClamped;
-        worldPosStore[i * 3 + 2] = wz;
+          positions[idx * 3] = wx;
+          positions[idx * 3 + 1] = wy;
+          positions[idx * 3 + 2] = wz;
+          worldPosStore[idx * 3] = wx;
+          worldPosStore[idx * 3 + 1] = wy;
+          worldPosStore[idx * 3 + 2] = wz;
 
-        // 6. 粒子大小：靠壁面大、靠中轴小，叠加位置噪声
-        const baseSize = 0.04 + (rr / R_MAX) * 0.06;
-        const noiseSize = baseSize * (
-          1.0 + Math.sin(wx * 7.31 + wz * 3.17) * 0.12
-              + Math.cos(wyClamped * 5.73 + wx * 2.91) * 0.10
-              + Math.sin((wx + wyClamped) * 4.19 + wz * 6.53) * 0.08
-        );
-        sizes[i] = Math.max(0.012, Math.min(0.15, noiseSize));
+          const baseSize = 0.04 + (rr / R_MAX) * 0.06;
+          const noiseSize = baseSize * (
+            1.0 + Math.sin(wx * 7.31 + wz * 3.17) * 0.12
+                + Math.cos(wy * 5.73 + wx * 2.91) * 0.10
+                + Math.sin((wx + wy) * 4.19 + wz * 6.53) * 0.08
+          );
+          sizes[idx] = Math.max(0.012, Math.min(0.15, noiseSize));
+          idx++;
+        }
       }
 
       const geometry = new THREE.BufferGeometry();
@@ -306,6 +300,7 @@
           ])),
           uLightCount: new THREE.Uniform(3),
           uCameraPos: new THREE.Uniform(new THREE.Vector3(0, -8, 3.5)),
+          uTime: new THREE.Uniform(0),
         },
         vertexShader: `
           attribute float aSize;
@@ -325,6 +320,7 @@
           uniform float uLightColor[36];
           uniform int uLightCount;
           uniform vec3 uCameraPos;
+          uniform float uTime;
 
           void main() {
             float d = length(gl_PointCoord - 0.5) * 2.0;
@@ -348,6 +344,7 @@
             vec3 farColor  = vec3(0.35, 0.45, 0.65);
             vec3 baseColor = mix(farColor, nearColor, clamp(warmth, 0.0, 1.0));
 
+            // 静态高亮噪声
             float sparkle = abs(
               sin(vWorldPos.x * 23.7 + vWorldPos.y * 17.3)
               + cos(vWorldPos.y * 31.1 + vWorldPos.z * 19.7)
@@ -355,8 +352,14 @@
             );
             sparkle = pow(sparkle / 3.0, 4.0) * 0.5;
 
-            vec3 finalColor = baseColor * totalLight * (1.0 + sparkle);
-            float finalAlpha = alpha * (0.25 + length(totalLight) * 0.7);
+            // 时间闪烁：每个粒子独立相位，sin 后取高次幂让闪烁"锐利"
+            float phase = vWorldPos.x * 13.37 + vWorldPos.y * 17.73 + vWorldPos.z * 11.11;
+            float twinkle = 0.5 + 0.5 * sin(uTime * 2.5 + phase);
+            twinkle = pow(twinkle, 6.0);
+            float twinkleBoost = 0.6 + 0.4 * twinkle; // 0.6~1.0 范围
+
+            vec3 finalColor = baseColor * totalLight * (1.0 + sparkle) * twinkleBoost;
+            float finalAlpha = alpha * (0.25 + length(totalLight) * 0.7) * twinkleBoost;
 
             gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 1.0));
           }
@@ -376,6 +379,7 @@
       if (cameraPos) {
         this._points.material.uniforms.uCameraPos.value.copy(cameraPos);
       }
+      this._points.material.uniforms.uTime.value += delta;
     }
 
     dispose() {
